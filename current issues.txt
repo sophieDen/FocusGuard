@@ -1,0 +1,1 @@
+- breaks when face goes out of full range of mesh

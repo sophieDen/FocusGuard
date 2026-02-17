@@ -45,7 +45,16 @@ def landmark_vals(frame):
 
     return lm_result # 468 landmarks on the face
 
+def full_landmark_mapping(lm_result, frame): # does the full face, just testing
+    full_landmarks = lm_result.face_landmarks[0] # only uses the first face that it detects
 
+    h, w, _ = frame.shape
+
+
+    for landmark in full_landmarks:
+        lm_x = int(landmark.x * w)
+        lm_y = int(landmark.y * h)
+        cv2.circle(frame, (lm_x, lm_y), 1, (0, 255, 0), -1) # img, xy,size,col, thickness/ neg-fill
 
 
 #==========================================================
@@ -67,12 +76,27 @@ while True:
         print("Could not read image")
         exit()
 
-    cv2.imshow("Current feed:", frame)
+
 
     # shows the position of the values
     lm_result = landmark_vals(frame)
     print(lm_result)
 
+
+    # ========================
+    # ========================
+    #   show feed + landmarks
+    # ========================
+    # ========================
+    full_landmark_mapping(lm_result=lm_result,frame=frame)
+
+    cv2.imshow("Current feed:", frame)
+
+    #======================
+    #======================
+    #   exit window
+    #======================
+    #======================
 
     if cv2.waitKey(1) & 0xFF == ord('q'): # press q to exit the window
         break
