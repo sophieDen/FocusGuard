@@ -18,11 +18,60 @@ import cv2
 # mediapipe.graphs.iris_tracking.calculators.subgraph
 # mp.tasks.vision.face_landmarker.FaceLandmarker.detect()
 
-def Web_cam_feed():
-    img = cv2.VideoCapture(1)
-    if not img.isOpened():
-        err = "Could not open feed"
-        exit()
-        return err
-    return img
+
+#==========================================================
+#==========================================================
+#   grab the web cam feed
+#==========================================================
+#==========================================================
+
+
+def web_cam_feed():
+    feed = cv2.VideoCapture(1)
+    if not feed.isOpened():
+        print("Could not open feed")
+        return None
+
+    ret, frame = feed.read()
+    if not ret:
+        print("Could not read image")
+        return None
+
+    return frame
+
+frame = web_cam_feed()
+
+#==========================================================
+#==========================================================
+#   get the landmarks - must manually show them
+#==========================================================
+#==========================================================
+
+def landmark_vals(frame):
+    if frame is not None:
+        mp_frame = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
+        lm_result = vision.FaceLandmarker.detect(mp_frame)
+
+    return lm_result
+
+
+lm_result = landmark_vals(frame)
+
+
+print(lm_result)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
