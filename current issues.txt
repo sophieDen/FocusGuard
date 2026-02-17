@@ -1,1 +1,2 @@
 - breaks when face goes out of full range of mesh
+- need to get index of eye vals in full_landmarks

@@ -31,11 +31,11 @@ options = vision.FaceLandmarkerOptions(base_options=base_options)
 face_landmarker = vision.FaceLandmarker.create_from_options(options) # turns it into a usable object
 
 
-#==========================================================
-#==========================================================
-#   get the landmarks - must manually show them
-#==========================================================
-#==========================================================
+#=============================================================================
+#=============================================================================
+#   get the landmarks - must manually show them - just gives position vals
+#=============================================================================
+#=============================================================================
 
 def landmark_vals(frame):
     if frame is None:
@@ -48,11 +48,10 @@ def landmark_vals(frame):
 def full_landmark_mapping(lm_result, frame): # does the full face, just testing
     full_landmarks = lm_result.face_landmarks[0] # only uses the first face that it detects
 
-    h, w, _ = frame.shape
-
+    h, w, _ = frame.shape # used for scaling, '_' ---- dont need channel nums
 
     for landmark in full_landmarks:
-        lm_x = int(landmark.x * w)
+        lm_x = int(landmark.x * w) # mp vals are normalised need scaling up
         lm_y = int(landmark.y * h)
         cv2.circle(frame, (lm_x, lm_y), 1, (0, 255, 0), -1) # img, xy,size,col, thickness/ neg-fill
 
@@ -85,7 +84,7 @@ while True:
 
     # ========================
     # ========================
-    #   show feed + landmarks
+    #   show feed + face landmarks
     # ========================
     # ========================
     full_landmark_mapping(lm_result=lm_result,frame=frame)
