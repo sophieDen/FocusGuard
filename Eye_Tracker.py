@@ -71,6 +71,10 @@ def eyes_landmark_mapping(lm_result, frame): # found the eye idx vals
 
     h, w, _ = frame.shape # used for scaling, '_' ---- dont need channel nums
 
+    #================
+    # generates the landmarks
+    #=======================
+
     for idx in lm_eyes:
         lm = full_landmarks[idx]
         lm_x = int(lm.x * w) # mp vals are normalised need scaling up
