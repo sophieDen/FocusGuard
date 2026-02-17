@@ -56,6 +56,26 @@ def full_landmark_mapping(lm_result, frame): # does the full face, just testing
         cv2.circle(frame, (lm_x, lm_y), 1, (0, 255, 0), -1) # img, xy,size,col (bgr), thickness/ neg-fill #
 
 
+
+def eyes_landmark_mapping(lm_result, frame):
+    lm_le= [463, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382, 362]  # Left eye landmarks
+
+    lm_re = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7]  # Right eye landmarks
+
+    lm_eyes = lm_le + lm_re # both eyes
+
+    full_landmarks = lm_result.face_landmarks[0] # only uses the first face that it detects
+
+    h, w, _ = frame.shape # used for scaling, '_' ---- dont need channel nums
+
+    for idx in lm_eyes:
+        lm = full_landmarks[idx]
+        lm_x = int(lm.x * w) # mp vals are normalised need scaling up
+        lm_y = int(lm.y * h)
+        cv2.circle(frame, (lm_x, lm_y), 1, (0, 0, 255), -1) # img, xy,size,col (bgr), thickness/ neg-fill #
+
+
+
 #==========================================================
 #==========================================================
 #   grab the web cam feed
@@ -88,6 +108,8 @@ while True:
     # ========================
     # ========================
     full_landmark_mapping(lm_result=lm_result,frame=frame)
+
+    eyes_landmark_mapping(lm_result=lm_result, frame=frame)
 
     cv2.imshow("Current feed:", frame)
 

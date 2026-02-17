@@ -1,2 +1,35 @@
 - breaks when face goes out of full range of mesh
+
+- need to measure blinking/staring
+
+
+
+
+
+
+
+
+
+
+
 - need to get index of eye vals in full_landmarks
+pre 2023
+- https://medium.com/%40asadullahdal/iris-segmentation-mediapipe-python-a4deb711aae3
+
+# Left eye indices list
+LEFT_EYE =[ 362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385,384, 398 ]
+# Right eye indices list
+RIGHT_EYE=[ 33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161 , 246 ]
+
+
+
+
+post 2023 - USE THESE
+
+- https://medium.com/%40Mert.A/detect-eyes-nose-and-mouth-with-mediapipe-bbfdf7a61f21
+
+LEFT_EYE_LANDMARKS = [463, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374,
+                           380, 381, 382, 362]  # Left eye landmarks
+
+RIGHT_EYE_LANDMARKS = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145,
+                            144, 163, 7]  # Right eye landmarks
