@@ -28,3 +28,9 @@ class AlertManager:
             return True
 
         return False
+    
+    def _display(self, result: DetectionResult):
+        # Later this hooks into the frontend — for now just prints
+        tag = result.module_name.upper()
+        print(f"[{tag} WARNING] {result.warning_message} "
+              f"(confidence: {result.confidence:.0%})")
