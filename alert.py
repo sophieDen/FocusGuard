@@ -1,5 +1,5 @@
 import time
-from .base_detector import DetectionResult
+from core.base_detector import DetectionResult
 
 class AlertManager:
     """

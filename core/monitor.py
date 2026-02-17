@@ -1,7 +1,7 @@
 import cv2
 import time
 import importlib
-from .alert import AlertManager
+from alert import AlertManager
 from .base_detector import BaseDetector
 from config import CAMERA_INDEX, FRAME_WIDTH, FRAME_HEIGHT, TARGET_FPS
 
