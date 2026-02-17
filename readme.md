@@ -1,3 +1,4 @@
+```
 ├── main.py                  # Entry point — runs everything
 ├── config.py                # Shared thresholds, camera settings, constants - feel free to change for your module
 ├── README.md
@@ -17,3 +18,4 @@
 │
 └── data/
     └── models/              # Any saved ML model files
+```
