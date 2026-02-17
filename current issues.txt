@@ -1,4 +1,4 @@
-- breaks when face goes out of full range of mesh
+- breaks when face goes out of full range of mesh -- probs line 42
 
 - need to measure blinking/staring
 
