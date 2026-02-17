@@ -53,7 +53,7 @@ def full_landmark_mapping(lm_result, frame): # does the full face, just testing
     for landmark in full_landmarks:
         lm_x = int(landmark.x * w) # mp vals are normalised need scaling up
         lm_y = int(landmark.y * h)
-        cv2.circle(frame, (lm_x, lm_y), 1, (0, 255, 0), -1) # img, xy,size,col, thickness/ neg-fill
+        cv2.circle(frame, (lm_x, lm_y), 1, (0, 255, 0), -1) # img, xy,size,col (bgr), thickness/ neg-fill #
 
 
 #==========================================================
