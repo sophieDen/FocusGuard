@@ -3,6 +3,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import cv2
 import numpy as np
+import time
 
 # use tasks not solutions
 
@@ -90,6 +91,16 @@ def eyes_landmark_mapping(lm_result, frame): # found the eye idx vals
 #=========================================================================
 #=========================================================================
 
+def seconds_to_frames(num_frames_count, start_time, user_second_amount=10):
+    current_time = time.time()
+    t_passed = current_time - start_time
+    fps = num_frames_count/ t_passed
+
+    secs_in_frames = fps * user_second_amount
+    return secs_in_frames
+
+
+
 def eye_range_vals(lm_result, frame):
     # lm = landmark // le = left eye // re = right eye // u = upper // l = lower
     lm_le_u = [384, 387]           #[386, 263]
@@ -168,8 +179,24 @@ feed = cv2.VideoCapture(0) # make sure this is 0 for default camera unless there
 # rolling temporal memory
 lm_le_range, lm_re_range = [], []
 
+# fps
+num_frames_count = 0
+start_time = time.time()
+
+
 while True:
 
+
+    #==================================================
+    # seconds to frames converter - change user_second_amount
+    #====================================================
+    num_frames_count += 1
+    n_sec_frames = seconds_to_frames(num_frames_count=num_frames_count, start_time=start_time, user_second_amount=10)
+
+
+    #=================
+    # access webcam
+    #=================
     if not feed.isOpened():
         print("Could not open feed")
         exit()
@@ -200,9 +227,9 @@ while True:
     lm_le_range.append(lm_le_range_extract)
     lm_re_range.append(lm_re_range_extract)
     #rolling temporal memory - n_frames to adjust size of memory
-    rolling_temporal_memory(lm_le_range=lm_le_range, lm_re_range=lm_re_range)
+    rolling_temporal_memory(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames)
     # sleeping message
-    eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range)
+    eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10)
 
 
     cv2.imshow("Current feed:", frame)

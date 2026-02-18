@@ -6,6 +6,10 @@
 
 - potentially have the wrong points (landmarks) - giving negative values
 
+- add frames to fps as metric of time count
+
+- eye sleeping threashold currently probably too strict criteria
+
 
 
 
