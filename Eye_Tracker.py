@@ -166,17 +166,17 @@ def eye_range_vals(lm_result, frame):
 def eye_sleeping_threshold(lm_le_range, lm_re_range, n_frames=40, threshold=1): # needs to apply over time
     if np.mean(lm_le_range) <= threshold or np.mean(lm_re_range) <= threshold and len(lm_re_range) > n_frames :
         print(f"le len: {len(lm_le_range)}, re len: {len(lm_re_range)}")
-        return "Eyes are closed"
+        return "Eyes are closed", True # sleeping
     else:
         print(f"le len: {len(lm_le_range)}, \nre len: {len(lm_re_range)}")
-        return None
+        return False
 
 
 #=====================
 # screen staring/ no blinks
 #=====================
 
-def eye_staring_threshold(lm_le_range, lm_re_range, n_frames=25, threshold_frames=1, n_threshold=2):
+def eye_blink_threshold(lm_le_range, lm_re_range, n_frames=25, threshold_frames=3, n_threshold=2):
     '''
 
     :param lm_le_range: left eye range
@@ -192,12 +192,21 @@ def eye_staring_threshold(lm_le_range, lm_re_range, n_frames=25, threshold_frame
     lm_re_range = np.array(lm_re_range).flatten()
 
 
-    above_threshold = (Counter(lm_le_range[-threshold_frames:])[n_threshold] + Counter(lm_re_range[-threshold_frames:])[n_threshold]) / 2
+    le_threshold = np.sum(lm_le_range[-threshold_frames:] <= n_threshold) #[n_threshold]
+    re_threshold = np.sum(lm_re_range[-threshold_frames:] <= n_threshold)
 
-    if above_threshold > threshold_frames and len(lm_re_range) > n_frames: # if true blink occurred
-        return "blink"
+    if le_threshold >= threshold_frames and re_threshold >= threshold_frames and len(lm_re_range) > n_frames: # if true blink occurred
+        return "blink", True # blinked
     else:
-        return None
+        return False
+
+
+
+
+
+
+
+
 
 
 
@@ -285,7 +294,7 @@ while True:
     # sleeping message
     print("s_status:",eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10))
     # blinked message
-    print("b_status:",eye_staring_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10, threshold_frames=1))
+    print("b_status:",eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10, threshold_frames=1))
 
     cv2.imshow("Current feed:", frame)
 
