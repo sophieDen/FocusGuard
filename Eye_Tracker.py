@@ -163,20 +163,22 @@ def eye_range_vals(lm_result, frame):
 # basic sleep detection
 #========================
 
-def eye_sleeping_threshold(lm_le_range, lm_re_range, n_frames=40, threshold=1): # needs to apply over time
+def eye_sleeping_threshold(lm_le_range, lm_re_range, one_sec_n_frames=40, threshold=1, s_duration=10): # needs to apply over time
+    n_frames = one_sec_n_frames * s_duration
+
     if np.mean(lm_le_range) <= threshold or np.mean(lm_re_range) <= threshold and len(lm_re_range) > n_frames :
         print(f"le len: {len(lm_le_range)}, re len: {len(lm_re_range)}")
-        return "Eyes are closed", True # sleeping
+        return True # sleeping
     else:
         print(f"le len: {len(lm_le_range)}, \nre len: {len(lm_re_range)}")
-        return False
+        return False # awake
 
 
 #=====================
 # screen staring/ no blinks
 #=====================
 
-def eye_blink_threshold(lm_le_range, lm_re_range, n_frames=25, threshold_frames=3, n_threshold=2):
+def eye_blink_threshold(lm_le_range, lm_re_range, one_sec_n_frames=25, threshold_frames=3, n_threshold=2, b_duration=1):
     '''
 
     :param lm_le_range: left eye range
@@ -184,8 +186,10 @@ def eye_blink_threshold(lm_le_range, lm_re_range, n_frames=25, threshold_frames=
     :param n_frames: number of frames count is over ( rolling window)
     :param threshold_frames: number of frames that must be under n_threashold
     :param n_threshold: the threashold for what is considered low enough for a blink value
+    :param b_duration: toggles the amount of time that blink is over but no need for more than 1 really
     :return:
     '''
+    n_frames = one_sec_n_frames * b_duration
 
     # outputs a list of arrays needed to flatten them for counter to work
     lm_le_range = np.array(lm_le_range).flatten()
@@ -196,12 +200,31 @@ def eye_blink_threshold(lm_le_range, lm_re_range, n_frames=25, threshold_frames=
     re_threshold = np.sum(lm_re_range[-threshold_frames:] <= n_threshold)
 
     if le_threshold >= threshold_frames and re_threshold >= threshold_frames and len(lm_re_range) > n_frames: # if true blink occurred
-        return "blink", True # blinked
+        return True # blinked
     else:
-        return False
+        return False # not blinked
 
 
+def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration=10):
+    '''
 
+    :param blink_threshold_func: gets True or False from last Func
+    :param staring_seconds: amount of time user is starig at the screen in frames
+    :param one_sec_n_frames: calculates the amount of frames per second
+    :param staring_duration:
+    :return:
+    '''
+    n_frames = one_sec_n_frames * staring_duration # gives threshold amount of time staring in frames
+    global staring_seconds
+    if blink_threshold_func == True:
+        staring_seconds = 0
+        return False # not staring
+    else:
+        staring_seconds +=1
+        if staring_seconds > n_frames: # has threshold been reached
+            return True # staring
+        else:
+            return False # not staring
 
 
 
@@ -245,6 +268,8 @@ lm_le_range, lm_re_range = [], []
 num_frames_count = 0
 start_time = time.time()
 
+# stare time counter
+staring_seconds = 0
 
 while True:
 
@@ -255,6 +280,7 @@ while True:
     num_frames_count += 1
     print(f"frames: {num_frames_count}")
     n_sec_frames = seconds_to_frames(num_frames_count=num_frames_count, start_time=start_time, user_second_amount=1)
+    one_sec_n_frames = seconds_to_frames(num_frames_count=num_frames_count, start_time=start_time, user_second_amount=1)
 
 
     #=================
@@ -278,24 +304,36 @@ while True:
 
     # ========================
     # ========================
-    #   show feed + face landmarks
+    #  face landmarks + checks
     # ========================
     # ========================
+
     # all face landmarks
     full_landmark_mapping(lm_result=lm_result,frame=frame)
+
     # eye landmarks
     eyes_landmark_mapping(lm_result=lm_result, frame=frame)
+
     # eye landmark range vals
     lm_le_range_extract, lm_re_range_extract = eye_range_vals(lm_result=lm_result, frame=frame)
     lm_le_range.append(lm_le_range_extract)
     lm_re_range.append(lm_re_range_extract)
+
     #rolling temporal memory - n_frames to adjust size of memory
     rolling_temporal_memory(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames)
-    # sleeping message
-    print("s_status:",eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10))
-    # blinked message
-    print("b_status:",eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10, threshold_frames=1))
 
+    # sleeping check - n_frames changes num secs monitoring sleep
+    print("sl_status:",eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames-10))
+
+    # blinked check
+    print("b_status:",eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames, threshold_frames=1))
+    ebt = eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames, threshold_frames=1)
+    # staring check - staring duration in secs, increase for longer delay
+    print("stare_status:", eye_staring_tracker(blink_threshold_func=ebt, one_sec_n_frames=one_sec_n_frames, staring_duration=5))
+
+    #=============
+    #   show feed
+    #===============
     cv2.imshow("Current feed:", frame)
 
     #=======================
