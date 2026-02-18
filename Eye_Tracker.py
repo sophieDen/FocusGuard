@@ -270,9 +270,15 @@ def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration
 
 
 
+#=====================================================
+# gaze tracker
+#=====================================================
 
+def gaze_direct_detect(lm_result, frame):
+    pass
 
-
+def gaze_duration_detect():
+    pass
 
 
 #================
