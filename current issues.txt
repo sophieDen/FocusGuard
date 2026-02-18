@@ -9,6 +9,7 @@
 - add frames to fps as metric of time count
 
 - eye sleeping threashold currently probably too strict criteria
+- maybe change vals to int for *h
 
 
 

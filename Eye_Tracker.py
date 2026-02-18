@@ -94,7 +94,7 @@ def eyes_landmark_mapping(lm_result, frame): # found the eye idx vals
 def seconds_to_frames(num_frames_count, start_time, user_second_amount=10):
     current_time = time.time()
     t_passed = current_time - start_time
-    fps = num_frames_count/ t_passed
+    fps = num_frames_count / (t_passed + 1e-8) # ensuring non-zero division
 
     secs_in_frames = fps * user_second_amount
     return secs_in_frames
@@ -124,8 +124,8 @@ def eye_range_vals(lm_result, frame):
     # for left eye only
     print('Left Eye:') # there are 2 vals top and bottom
     for upper, lower in (lm_le_u, lm_le_l): # currently crossing vals
-        upper_vals = upper.y * h
-        lower_vals = lower.y * h
+        upper_vals = int(upper.y * h)
+        lower_vals = int(lower.y * h)
         range = upper_vals - lower_vals
         lm_le_range.append(range)
         print(range) # getting the distance over the eye
@@ -133,8 +133,8 @@ def eye_range_vals(lm_result, frame):
         # for left eye only
     print('Right Eye:')  # there are 2 vals top and bottom
     for upper, lower in (lm_re_u, lm_re_l):  # currently crossing vals
-        upper_vals = upper.y * h
-        lower_vals = lower.y * h
+        upper_vals = int(upper.y * h)
+        lower_vals = int(lower.y * h)
         range = upper_vals - lower_vals
         lm_re_range.append(range)
         print(range)  # getting the distance over the eye
@@ -142,8 +142,12 @@ def eye_range_vals(lm_result, frame):
     return lm_le_range, lm_re_range
 
 def eye_sleeping_threshold(lm_le_range, lm_re_range, n_frames=40): # needs to apply over time
-    if all(lm_le_range) < 0 and all(lm_re_range) < 0 and len(lm_re_range) > n_frames and len(lm_le_range) > n_frames:
+    if all(lm_le_range) < 0 or all(lm_re_range) < 0 and len(lm_re_range) > n_frames :
+        print(f"le len: {len(lm_le_range)}, re len: {len(lm_re_range)}")
         return "Eyes are closed"
+    else:
+        print(f"le len: {len(lm_le_range)}, \nre len: {len(lm_re_range)}")
+        return None
 
 def rolling_temporal_memory(lm_le_range, lm_re_range, n_frames=50):
     if len(lm_le_range) > n_frames and len(lm_re_range) > n_frames: # arbitrary number threshold
@@ -191,7 +195,8 @@ while True:
     # seconds to frames converter - change user_second_amount
     #====================================================
     num_frames_count += 1
-    n_sec_frames = seconds_to_frames(num_frames_count=num_frames_count, start_time=start_time, user_second_amount=10)
+    print(f"frames: {num_frames_count}")
+    n_sec_frames = seconds_to_frames(num_frames_count=num_frames_count, start_time=start_time, user_second_amount=1)
 
 
     #=================
@@ -229,10 +234,15 @@ while True:
     #rolling temporal memory - n_frames to adjust size of memory
     rolling_temporal_memory(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames)
     # sleeping message
-    eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10)
+    print("status:",eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10))
 
 
     cv2.imshow("Current feed:", frame)
+
+    #=======================
+    # lazy value seperation
+    #=========================
+    print()
 
     #======================
     #======================
