@@ -199,7 +199,7 @@ def eye_blink_threshold(lm_le_range, lm_re_range, one_sec_n_frames=25, threshold
     le_threshold = np.sum(lm_le_range[-threshold_frames:] <= n_threshold) #[n_threshold]
     re_threshold = np.sum(lm_re_range[-threshold_frames:] <= n_threshold)
 
-    if le_threshold >= threshold_frames and re_threshold >= threshold_frames and len(lm_re_range) > n_frames: # if true blink occurred
+    if le_threshold >= threshold_frames and re_threshold >= threshold_frames and len(lm_re_range) > n_frames-10: # if true blink occurred
         return True # blinked
     else:
         return False # not blinked
@@ -211,12 +211,12 @@ def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration
     :param blink_threshold_func: gets True or False from last Func
     :param staring_seconds: amount of time user is starig at the screen in frames
     :param one_sec_n_frames: calculates the amount of frames per second
-    :param staring_duration:
+    :param staring_duration: how many secs spent staring
     :return:
     '''
     n_frames = one_sec_n_frames * staring_duration # gives threshold amount of time staring in frames
     global staring_seconds
-    if blink_threshold_func == True:
+    if blink_threshold_func: # if true
         staring_seconds = 0
         return False # not staring
     else:

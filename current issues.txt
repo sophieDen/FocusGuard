@@ -10,7 +10,7 @@
 
 - eye sleeping threashold currently probably too strict criteria
 - maybe change vals to int for *h
-- need EAR
+- need EAR for n_threashold and lm_le_range and lm_re_range and threashold in sleep
 
 
 
