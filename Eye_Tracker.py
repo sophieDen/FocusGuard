@@ -4,6 +4,7 @@ from mediapipe.tasks.python import vision
 import cv2
 import numpy as np
 import time
+from collections import Counter
 
 # use tasks not solutions
 
@@ -103,12 +104,12 @@ def seconds_to_frames(num_frames_count, start_time, user_second_amount=10):
 
 def eye_range_vals(lm_result, frame):
     # lm = landmark // le = left eye // re = right eye // u = upper // l = lower
-    lm_le_u = [384, 387]           #[386, 263]
-    lm_le_l = [381, 390]          #[374, 382]
-    lm_re_u = [161, 158]          #[159, 133]
-    lm_re_l = [163, 153]          #[145, 153]
+    lm_le_u = 386              #[384, 387] #[386, 263]
+    lm_le_l = 374              #[381, 390] #[374, 382]
+    lm_re_u = 159              #[161, 158] #[159, 133]
+    lm_re_l = 145              #[163, 153] #[145, 153]
 
-    full_landmarks = np.array(lm_result.face_landmarks[0])
+    full_landmarks = lm_result.face_landmarks[0]
 
     # mapping val positions
     lm_le_u = full_landmarks[lm_le_u]
@@ -122,32 +123,87 @@ def eye_range_vals(lm_result, frame):
     lm_le_range = []
     lm_re_range = []
     # for left eye only
+    # print('Left Eye:') # there are 2 vals top and bottom
+    # for upper, lower in (lm_le_u, lm_le_l): # now only one val
+    #     upper_vals = int(upper.y * h)
+    #     lower_vals = int(lower.y * h)
+    #     range = lower_vals - upper_vals
+    #     lm_le_range.append(range)
+    #     print(range) # getting the distance over the eye
+    #
+    #     # for left eye only
+    # print('Right Eye:')  # there are 2 vals top and bottom
+    # for upper, lower in (lm_re_u, lm_re_l):  # currently crossing vals
+    #     upper_vals = int(upper.y * h)
+    #     lower_vals = int(lower.y * h)
+    #     range = lower_vals - upper_vals
+    #     lm_re_range.append(range)
+    #     print(range)  # getting the distance over the eye
+
     print('Left Eye:') # there are 2 vals top and bottom
-    for upper, lower in (lm_le_u, lm_le_l): # currently crossing vals
-        upper_vals = int(upper.y * h)
-        lower_vals = int(lower.y * h)
-        range = upper_vals - lower_vals
-        lm_le_range.append(range)
-        print(range) # getting the distance over the eye
+    # for upper, lower in (lm_le_u, lm_le_l): # now only one val
+    upper_vals = int(lm_le_u.y * h)
+    lower_vals = int(lm_le_l.y * h)
+    range = lower_vals - upper_vals
+    lm_le_range.append(range)
+    print(range) # getting the distance over the eye
 
         # for left eye only
     print('Right Eye:')  # there are 2 vals top and bottom
-    for upper, lower in (lm_re_u, lm_re_l):  # currently crossing vals
-        upper_vals = int(upper.y * h)
-        lower_vals = int(lower.y * h)
-        range = upper_vals - lower_vals
-        lm_re_range.append(range)
-        print(range)  # getting the distance over the eye
+    # for upper, lower in (lm_re_u, lm_re_l):  # currently crossing vals
+    upper_vals = int(lm_re_u.y * h)
+    lower_vals = int(lm_re_l.y * h)
+    range = lower_vals - upper_vals
+    lm_re_range.append(range)
+    print(range)  # getting the distance over the eye
 
     return lm_le_range, lm_re_range
 
-def eye_sleeping_threshold(lm_le_range, lm_re_range, n_frames=40): # needs to apply over time
-    if all(lm_le_range) < 0 or all(lm_re_range) < 0 and len(lm_re_range) > n_frames :
+#===============
+# basic sleep detection
+#========================
+
+def eye_sleeping_threshold(lm_le_range, lm_re_range, n_frames=40, threshold=1): # needs to apply over time
+    if np.mean(lm_le_range) <= threshold or np.mean(lm_re_range) <= threshold and len(lm_re_range) > n_frames :
         print(f"le len: {len(lm_le_range)}, re len: {len(lm_re_range)}")
         return "Eyes are closed"
     else:
         print(f"le len: {len(lm_le_range)}, \nre len: {len(lm_re_range)}")
         return None
+
+
+#=====================
+# screen staring/ no blinks
+#=====================
+
+def eye_staring_threshold(lm_le_range, lm_re_range, n_frames=25, threshold_frames=1, n_threshold=2):
+    '''
+
+    :param lm_le_range: left eye range
+    :param lm_re_range: right eye range
+    :param n_frames: number of frames count is over ( rolling window)
+    :param threshold_frames: number of frames that must be under n_threashold
+    :param n_threshold: the threashold for what is considered low enough for a blink value
+    :return:
+    '''
+
+    # outputs a list of arrays needed to flatten them for counter to work
+    lm_le_range = np.array(lm_le_range).flatten()
+    lm_re_range = np.array(lm_re_range).flatten()
+
+
+    above_threshold = (Counter(lm_le_range[-threshold_frames:])[n_threshold] + Counter(lm_re_range[-threshold_frames:])[n_threshold]) / 2
+
+    if above_threshold > threshold_frames and len(lm_re_range) > n_frames: # if true blink occurred
+        return "blink"
+    else:
+        return None
+
+
+
+#================
+# rolling temporal memory
+#=================
 
 def rolling_temporal_memory(lm_le_range, lm_re_range, n_frames=50):
     if len(lm_le_range) > n_frames and len(lm_re_range) > n_frames: # arbitrary number threshold
@@ -155,13 +211,6 @@ def rolling_temporal_memory(lm_le_range, lm_re_range, n_frames=50):
         del lm_le_range[1] # left second val
         del lm_re_range[0] # right first val
         del lm_re_range[1] # right second val
-
-#=================
-# closed eyes
-#==================
-
-def eyes_closed():
-    pass
 
 
 
@@ -234,8 +283,9 @@ while True:
     #rolling temporal memory - n_frames to adjust size of memory
     rolling_temporal_memory(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames)
     # sleeping message
-    print("status:",eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10))
-
+    print("s_status:",eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10))
+    # blinked message
+    print("b_status:",eye_staring_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames-10, threshold_frames=1))
 
     cv2.imshow("Current feed:", frame)
 

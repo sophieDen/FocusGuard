@@ -10,6 +10,7 @@
 
 - eye sleeping threashold currently probably too strict criteria
 - maybe change vals to int for *h
+- need EAR
 
 
 
