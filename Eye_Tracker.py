@@ -282,7 +282,7 @@ def gaze_duration_detect():
     pass
 
 
-#================
+#=================
 # rolling temporal memory
 #=================
 
