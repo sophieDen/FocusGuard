@@ -92,10 +92,10 @@ def eyes_landmark_mapping(lm_result, frame): # found the eye idx vals
 
 def eye_staring(lm_result, frame):
     # lm = landmark // le = left eye // re = right eye // u = upper // l = lower
-    lm_le_u = [386, 263]
-    lm_le_l = [374, 382]
-    lm_re_u = [159, 133]
-    lm_re_l = [145, 153]
+    lm_le_u = [384, 387]           #[386, 263]
+    lm_le_l = [381, 390]          #[374, 382]
+    lm_re_u = [161, 158]          #[159, 133]
+    lm_re_l = [163, 153]          #[145, 153]
 
     full_landmarks = np.array(lm_result.face_landmarks[0])
 
@@ -109,11 +109,20 @@ def eye_staring(lm_result, frame):
     h, w, _ = frame.shape
 
     # for left eye only
-    for upper, lower in (lm_le_u, lm_le_l):
-        upper_vals = int(upper.y * h)
-        lower_vals = int(lower.y * h)
+    print('Left Eye:') # there are 2 vals top and bottom
+    for upper, lower in (lm_le_u, lm_le_l): # currently crossing vals
+        upper_vals = upper.y * h
+        lower_vals = lower.y * h
 
         print(upper_vals - lower_vals) # getting the distance over the eye
+
+        # for left eye only
+    print('Right Eye:')  # there are 2 vals top and bottom
+    for upper, lower in (lm_re_u, lm_re_l):  # currently crossing vals
+        upper_vals = upper.y * h
+        lower_vals = lower.y * h
+
+        print(upper_vals - lower_vals)  # getting the distance over the eye
 
 
 

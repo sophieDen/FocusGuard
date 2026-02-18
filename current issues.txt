@@ -4,6 +4,8 @@
 
 - need to track the pupil/ iris  to decide on the direction a person is looking
 
+- potentially have the wrong points (landmarks) - giving negative values
+
 
 
 
