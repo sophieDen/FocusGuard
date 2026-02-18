@@ -103,6 +103,16 @@ def seconds_to_frames(num_frames_count, start_time, user_second_amount=10):
 
 
 def eye_range_vals(lm_result, frame):
+
+
+
+
+
+
+
+
+
+
     # lm = landmark // le = left eye // re = right eye // u = upper // l = lower
     lm_le_u = 386              #[384, 387] #[386, 263]
     lm_le_l = 374              #[381, 390] #[374, 382]
@@ -110,12 +120,43 @@ def eye_range_vals(lm_result, frame):
     lm_re_l = 145              #[163, 153] #[145, 153]
 
     full_landmarks = lm_result.face_landmarks[0]
+    # print(full_landmarks)
 
     # mapping val positions
     lm_le_u = full_landmarks[lm_le_u]
     lm_le_l = full_landmarks[lm_le_l]
     lm_re_u = full_landmarks[lm_re_u]
     lm_re_l = full_landmarks[lm_re_l]
+
+
+    #=================
+    #   EAR = ((p2 - p6) + (p3 - p5)) / (2*(p1 - p4)) - vertical and horizontal ratio of open or shut
+
+    # left eye
+    p1 = np.array([full_landmarks[362].x,full_landmarks[362].y])
+    print(p1)
+    p2 = np.array([full_landmarks[385].x, full_landmarks[385].y])
+    p3 = np.array([full_landmarks[387].x, full_landmarks[387].y])
+    p4 = np.array([full_landmarks[263].x, full_landmarks[263].y])
+    p5 = np.array([full_landmarks[373].x, full_landmarks[373].y])
+    p6 = np.array([full_landmarks[380].x, full_landmarks[380].y])
+    le_EAR = (np.linalg.norm(p2 - p6) + np.linalg.norm(p3 - p5)) / (2 * np.linalg.norm(p1 - p4))
+
+    # right eye
+    rp1 = np.array([full_landmarks[33].x,  full_landmarks[33].y])
+    rp2 = np.array([full_landmarks[160].x, full_landmarks[160].y])
+    rp3 = np.array([full_landmarks[158].x, full_landmarks[158].y])
+    rp4 = np.array([full_landmarks[133].x, full_landmarks[133].y])
+    rp5 = np.array([full_landmarks[153].x, full_landmarks[153].y])
+    rp6 = np.array([full_landmarks[144].x, full_landmarks[144].y])
+    re_EAR = (np.linalg.norm(rp2 - rp6) + np.linalg.norm(rp3 - rp5)) / (2 * np.linalg.norm(rp1 - rp4))
+
+
+    #================
+
+
+
+
 
     # comparing upper and lower vals prioritising y vals
     h, w, _ = frame.shape
@@ -140,30 +181,30 @@ def eye_range_vals(lm_result, frame):
     #     lm_re_range.append(range)
     #     print(range)  # getting the distance over the eye
 
-    print('Left Eye:') # there are 2 vals top and bottom
-    # for upper, lower in (lm_le_u, lm_le_l): # now only one val
-    upper_vals = int(lm_le_u.y * h)
-    lower_vals = int(lm_le_l.y * h)
-    range = lower_vals - upper_vals
-    lm_le_range.append(range)
-    print(range) # getting the distance over the eye
+    # print('Left Eye:') # there are 2 vals top and bottom
+    # # for upper, lower in (lm_le_u, lm_le_l): # now only one val
+    # upper_vals = int(lm_le_u.y * h)
+    # lower_vals = int(lm_le_l.y * h)
+    # range = lower_vals - upper_vals
+    # lm_le_range.append(range)
+    # print(range) # getting the distance over the eye
+    #
+    #     # for left eye only
+    # print('Right Eye:')  # there are 2 vals top and bottom
+    # # for upper, lower in (lm_re_u, lm_re_l):  # currently crossing vals
+    # upper_vals = int(lm_re_u.y * h)
+    # lower_vals = int(lm_re_l.y * h)
+    # range = lower_vals - upper_vals
+    # lm_re_range.append(range)
+    # print(range)  # getting the distance over the eye
 
-        # for left eye only
-    print('Right Eye:')  # there are 2 vals top and bottom
-    # for upper, lower in (lm_re_u, lm_re_l):  # currently crossing vals
-    upper_vals = int(lm_re_u.y * h)
-    lower_vals = int(lm_re_l.y * h)
-    range = lower_vals - upper_vals
-    lm_re_range.append(range)
-    print(range)  # getting the distance over the eye
-
-    return lm_le_range, lm_re_range
+    return le_EAR, re_EAR#lm_le_range, lm_re_range # convert these to EAR values
 
 #===============
 # basic sleep detection
 #========================
 
-def eye_sleeping_threshold(lm_le_range, lm_re_range, one_sec_n_frames=40, threshold=1, s_duration=10): # needs to apply over time
+def eye_sleeping_threshold(lm_le_range, lm_re_range, one_sec_n_frames=40, threshold=0.15, s_duration=10): # needs to apply over time
     n_frames = one_sec_n_frames * s_duration
 
     if np.mean(lm_le_range) <= threshold or np.mean(lm_re_range) <= threshold and len(lm_re_range) > n_frames :
@@ -178,7 +219,7 @@ def eye_sleeping_threshold(lm_le_range, lm_re_range, one_sec_n_frames=40, thresh
 # screen staring/ no blinks
 #=====================
 
-def eye_blink_threshold(lm_le_range, lm_re_range, one_sec_n_frames=25, threshold_frames=3, n_threshold=2, b_duration=1):
+def eye_blink_threshold(lm_le_range, lm_re_range, one_sec_n_frames=25, threshold_frames=3, n_threshold=0.15, b_duration=1):
     '''
 
     :param lm_le_range: left eye range
@@ -194,6 +235,7 @@ def eye_blink_threshold(lm_le_range, lm_re_range, one_sec_n_frames=25, threshold
     # outputs a list of arrays needed to flatten them for counter to work
     lm_le_range = np.array(lm_le_range).flatten()
     lm_re_range = np.array(lm_re_range).flatten()
+    # print(lm_le_range)
 
 
     le_threshold = np.sum(lm_le_range[-threshold_frames:] <= n_threshold) #[n_threshold]
