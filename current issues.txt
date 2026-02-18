@@ -2,6 +2,7 @@
 
 - need to measure blinking/staring
 
+- need to track the pupil/ iris  to decide on the direction a person is looking
 
 
 
@@ -33,3 +34,21 @@ LEFT_EYE_LANDMARKS = [463, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373
 
 RIGHT_EYE_LANDMARKS = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145,
                             144, 163, 7]  # Right eye landmarks
+
+
+
+
+# Left Eye
+
+    "ule": 386,  # upper left corner of left eye
+    "ure": 263,  # upper right corner of left eye
+    "lle": 374,  # lower left corner of left eye
+    "lre": 382,  # lower right corner of left eye
+
+
+# Right Eye
+    "ule": 159,  # upper left corner of right eye
+    "ure": 133,  # upper right corner of right eye
+    "lle": 145,  # lower left corner of right eye
+    "lre": 153,  # lower right corner of right eye
+

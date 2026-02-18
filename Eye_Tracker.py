@@ -2,6 +2,7 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import cv2
+import numpy as np
 
 # use tasks not solutions
 
@@ -83,6 +84,51 @@ def eyes_landmark_mapping(lm_result, frame): # found the eye idx vals
 
 
 
+#=========================================================================
+#=========================================================================
+#       calculating the amount of time with eyes open/closed
+#=========================================================================
+#=========================================================================
+
+def eye_staring(lm_result, frame):
+    # lm = landmark // le = left eye // re = right eye // u = upper // l = lower
+    lm_le_u = [386, 263]
+    lm_le_l = [374, 382]
+    lm_re_u = [159, 133]
+    lm_re_l = [145, 153]
+
+    full_landmarks = np.array(lm_result.face_landmarks[0])
+
+    # mapping val positions
+    lm_le_u = full_landmarks[lm_le_u]
+    lm_le_l = full_landmarks[lm_le_l]
+    lm_re_u = full_landmarks[lm_re_u]
+    lm_re_l = full_landmarks[lm_re_l]
+
+    # comparing upper and lower vals prioritising y vals
+    h, w, _ = frame.shape
+
+    # for left eye only
+    for upper, lower in (lm_le_u, lm_le_l):
+        upper_vals = int(upper.y * h)
+        lower_vals = int(lower.y * h)
+
+        print(upper_vals - lower_vals) # getting the distance over the eye
+
+
+
+
+def eyes_closed():
+    pass
+
+
+
+
+
+
+
+
+
 #==========================================================
 #==========================================================
 #   grab the web cam feed
@@ -106,7 +152,7 @@ while True:
 
     # shows the position of the values
     lm_result = landmark_vals(frame)
-    print(lm_result)
+    # print(lm_result) #######################################################################################
 
 
     # ========================
@@ -117,6 +163,8 @@ while True:
     full_landmark_mapping(lm_result=lm_result,frame=frame)
 
     eyes_landmark_mapping(lm_result=lm_result, frame=frame)
+
+    eye_staring(lm_result=lm_result, frame=frame)
 
     cv2.imshow("Current feed:", frame)
 
