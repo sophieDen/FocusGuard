@@ -38,7 +38,8 @@ RIGHT_EYE_LANDMARKS = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153
                             144, 163, 7]  # Right eye landmarks
 
 
-
+##### face mesh vals ######
+https://storage.googleapis.com/mediapipe-assets/documentation/mediapipe_face_landmark_fullsize.png
 
 # Left Eye
 

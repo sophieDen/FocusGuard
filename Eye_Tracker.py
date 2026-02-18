@@ -90,7 +90,7 @@ def eyes_landmark_mapping(lm_result, frame): # found the eye idx vals
 #=========================================================================
 #=========================================================================
 
-def eye_staring(lm_result, frame):
+def eye_range_vals(lm_result, frame):
     # lm = landmark // le = left eye // re = right eye // u = upper // l = lower
     lm_le_u = [384, 387]           #[386, 263]
     lm_le_l = [381, 390]          #[374, 382]
@@ -108,24 +108,42 @@ def eye_staring(lm_result, frame):
     # comparing upper and lower vals prioritising y vals
     h, w, _ = frame.shape
 
+    lm_le_range = []
+    lm_re_range = []
     # for left eye only
     print('Left Eye:') # there are 2 vals top and bottom
     for upper, lower in (lm_le_u, lm_le_l): # currently crossing vals
         upper_vals = upper.y * h
         lower_vals = lower.y * h
-
-        print(upper_vals - lower_vals) # getting the distance over the eye
+        range = upper_vals - lower_vals
+        lm_le_range.append(range)
+        print(range) # getting the distance over the eye
 
         # for left eye only
     print('Right Eye:')  # there are 2 vals top and bottom
     for upper, lower in (lm_re_u, lm_re_l):  # currently crossing vals
         upper_vals = upper.y * h
         lower_vals = lower.y * h
+        range = upper_vals - lower_vals
+        lm_re_range.append(range)
+        print(range)  # getting the distance over the eye
 
-        print(upper_vals - lower_vals)  # getting the distance over the eye
+    return lm_le_range, lm_re_range
 
+def eye_sleeping_threshold(lm_le_range, lm_re_range, n_frames=40): # needs to apply over time
+    if all(lm_le_range) < 0 and all(lm_re_range) < 0 and len(lm_re_range) > n_frames and len(lm_le_range) > n_frames:
+        return "Eyes are closed"
 
+def rolling_temporal_memory(lm_le_range, lm_re_range, n_frames=50):
+    if len(lm_le_range) > n_frames and len(lm_re_range) > n_frames: # arbitrary number threshold
+        del lm_le_range[0] # left first val
+        del lm_le_range[1] # left second val
+        del lm_re_range[0] # right first val
+        del lm_re_range[1] # right second val
 
+#=================
+# closed eyes
+#==================
 
 def eyes_closed():
     pass
@@ -146,6 +164,10 @@ def eyes_closed():
 
 # keep outside of loop or camera lags
 feed = cv2.VideoCapture(0) # make sure this is 0 for default camera unless there are others
+
+# rolling temporal memory
+lm_le_range, lm_re_range = [], []
+
 while True:
 
     if not feed.isOpened():
@@ -169,11 +191,19 @@ while True:
     #   show feed + face landmarks
     # ========================
     # ========================
+    # all face landmarks
     full_landmark_mapping(lm_result=lm_result,frame=frame)
-
+    # eye landmarks
     eyes_landmark_mapping(lm_result=lm_result, frame=frame)
+    # eye landmark range vals
+    lm_le_range_extract, lm_re_range_extract = eye_range_vals(lm_result=lm_result, frame=frame)
+    lm_le_range.append(lm_le_range_extract)
+    lm_re_range.append(lm_re_range_extract)
+    #rolling temporal memory - n_frames to adjust size of memory
+    rolling_temporal_memory(lm_le_range=lm_le_range, lm_re_range=lm_re_range)
+    # sleeping message
+    eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range)
 
-    eye_staring(lm_result=lm_result, frame=frame)
 
     cv2.imshow("Current feed:", frame)
 
