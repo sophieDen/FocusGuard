@@ -52,14 +52,15 @@ def landmark_vals(frame):
 
 
 def full_landmark_mapping(lm_result, frame): # does the full face, just testing
-    full_landmarks = lm_result.face_landmarks[0] # only uses the first face that it detects
+    # print(f"len: {len(lm_result.face_landmarks)}")
+        full_landmarks = lm_result.face_landmarks[0] # only uses the first face that it detects
 
-    h, w, _ = frame.shape # used for scaling, '_' ---- dont need channel nums
+        h, w, _ = frame.shape # used for scaling, '_' ---- dont need channel nums
 
-    for landmark in full_landmarks:
-        lm_x = int(landmark.x * w) # mp vals are normalised need scaling up
-        lm_y = int(landmark.y * h)
-        cv2.circle(frame, (lm_x, lm_y), 1, (0, 255, 0), -1) # img, xy,size,col (bgr), thickness/ neg-fill #
+        for landmark in full_landmarks:
+            lm_x = int(landmark.x * w) # mp vals are normalised need scaling up
+            lm_y = int(landmark.y * h)
+            cv2.circle(frame, (lm_x, lm_y), 1, (0, 255, 0), -1) # img, xy,size,col (bgr), thickness/ neg-fill #
 
 
 
@@ -351,36 +352,36 @@ while True:
     # shows the position of the values
     lm_result = landmark_vals(frame)
     # print(lm_result) #######################################################################################
+    if len(lm_result.face_landmarks) == 1:
 
+        # ========================
+        # ========================
+        #  face landmarks + checks
+        # ========================
+        # ========================
 
-    # ========================
-    # ========================
-    #  face landmarks + checks
-    # ========================
-    # ========================
+        # all face landmarks
+        full_landmark_mapping(lm_result=lm_result,frame=frame)
 
-    # all face landmarks
-    full_landmark_mapping(lm_result=lm_result,frame=frame)
+        # eye landmarks
+        eyes_landmark_mapping(lm_result=lm_result, frame=frame)
 
-    # eye landmarks
-    eyes_landmark_mapping(lm_result=lm_result, frame=frame)
+        # eye landmark range vals
+        lm_le_range_extract, lm_re_range_extract = eye_range_vals(lm_result=lm_result, frame=frame)
+        lm_le_range.append(lm_le_range_extract)
+        lm_re_range.append(lm_re_range_extract)
 
-    # eye landmark range vals
-    lm_le_range_extract, lm_re_range_extract = eye_range_vals(lm_result=lm_result, frame=frame)
-    lm_le_range.append(lm_le_range_extract)
-    lm_re_range.append(lm_re_range_extract)
+        #rolling temporal memory - n_frames to adjust size of memory
+        rolling_temporal_memory(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames)
 
-    #rolling temporal memory - n_frames to adjust size of memory
-    rolling_temporal_memory(lm_le_range=lm_le_range, lm_re_range=lm_re_range, n_frames=n_sec_frames)
+        # sleeping check - n_frames changes num secs monitoring sleep
+        print("sl_status:",eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames-10))
 
-    # sleeping check - n_frames changes num secs monitoring sleep
-    print("sl_status:",eye_sleeping_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames-10))
-
-    # blinked check
-    print("b_status:",eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames, threshold_frames=1))
-    ebt = eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames, threshold_frames=1)
-    # staring check - staring duration in secs, increase for longer delay
-    print("stare_status:", eye_staring_tracker(blink_threshold_func=ebt, one_sec_n_frames=one_sec_n_frames, staring_duration=5))
+        # blinked check
+        print("b_status:",eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames, threshold_frames=1))
+        ebt = eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames, threshold_frames=1)
+        # staring check - staring duration in secs, increase for longer delay
+        print("stare_status:", eye_staring_tracker(blink_threshold_func=ebt, one_sec_n_frames=one_sec_n_frames, staring_duration=5))
 
     #=============
     #   show feed
