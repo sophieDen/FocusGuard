@@ -273,7 +273,9 @@ def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration
 #=====================================================  TODO #########################################################
 # gaze tracker                                          TODO #########################################################
 #=====================================================  TODO #########################################################
-
+# eye centre = (inner eye + outer eye) /2
+# iris centre = centre point iris
+# gaze = iris centre - eye centre / np.linalg.norm(iris centre - eye centre)
 
 def gaze_direct_detect(lm_result, frame):
     pass
