@@ -106,14 +106,6 @@ def seconds_to_frames(num_frames_count, start_time, user_second_amount=10):
 def eye_range_vals(lm_result, frame):
 
 
-
-
-
-
-
-
-
-
     # lm = landmark // le = left eye // re = right eye // u = upper // l = lower
     lm_le_u = 386              #[384, 387] #[386, 263]
     lm_le_l = 374              #[381, 390] #[374, 382]
@@ -277,11 +269,68 @@ def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration
 # eye centre = (inner eye + outer eye) /2
 # iris centre = centre point iris
 # gaze = iris centre - eye centre / np.linalg.norm(iris centre - eye centre)
+# ---- looking ----- #
+# left = gaze [0] < 0
+# right = gaze [0] > 0
+# up = gaze [1] < 0
+# down = gaze [1] > 0
+# centre =
 
-def gaze_direct_detect(lm_result, frame):
-    pass
+
+def gaze_direct_detect(lm_result, frame, c_threashold=1e-8):
+
+    h, w, _ = frame.shape
+
+    # including landmarks again
+    full_landmarks = lm_result.face_landmarks[0]
+
+    # left eye -  make sure to turn these into arrays of x and y or not gonna work
+    le_inner = np.array([full_landmarks[133].x * w, full_landmarks[133].y * h])
+    le_outer = np.array([full_landmarks[33].x * w, full_landmarks[33].y * h]) #
+
+    le_eye_centre = (le_inner + le_outer) / 2
+    le_iris_centre = np.array([full_landmarks[468].x * w, full_landmarks[468].y * h])
+
+    le_gaze = (le_iris_centre - le_eye_centre) / np.linalg.norm(le_iris_centre - le_eye_centre)
+
+    # right eye
+    re_inner = np.array([full_landmarks[362].x * w, full_landmarks[362].y * h])
+    re_outer = np.array([full_landmarks[263].x * w, full_landmarks[263].y * h]) #
+
+    re_eye_centre = (re_inner + re_outer) / 2
+    re_iris_centre = np.array([full_landmarks[473].x * w, full_landmarks[473].y * h])
+
+    re_gaze = (re_iris_centre - re_eye_centre) / np.linalg.norm(re_iris_centre - re_eye_centre)
+
+
+    # combining gaze
+
+    full_gaze = (le_gaze + re_gaze) / np.linalg.norm(le_gaze + re_gaze)
+
+    # looking direction logic
+    # todo inclulde threashold logic to lrud to stop it being overridden
+
+    if full_gaze[0] < 0: # left
+        return 1
+    elif full_gaze[0] > 0: # right
+        return 2
+    elif full_gaze[1] < 0: # up
+        return 3
+    elif full_gaze[1] > 0: # down
+        return 4
+    elif full_gaze[0] < c_threashold and full_gaze[0] > c_threashold and full_gaze[1] < c_threashold and full_gaze[1] > c_threashold: # centre
+        return 5
+
+
+
 
 def gaze_duration_detect():
+    '''
+    - need to include time checker - poss global again
+    - need to reset each time that it changes over set frames
+
+    :return:
+    '''
     pass
 
 
@@ -380,8 +429,15 @@ while True:
         # blinked check
         print("b_status:",eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames, threshold_frames=1))
         ebt = eye_blink_threshold(lm_le_range=lm_le_range, lm_re_range=lm_re_range, one_sec_n_frames=one_sec_n_frames, threshold_frames=1)
+
         # staring check - staring duration in secs, increase for longer delay
         print("stare_status:", eye_staring_tracker(blink_threshold_func=ebt, one_sec_n_frames=one_sec_n_frames, staring_duration=5))
+
+        # gaze direction checker
+        print("g_direction:",gaze_direct_detect(lm_result=lm_result, frame=frame))
+
+
+
 
     #=============
     #   show feed
