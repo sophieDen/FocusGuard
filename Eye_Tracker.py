@@ -352,7 +352,7 @@ while True:
     # shows the position of the values
     lm_result = landmark_vals(frame)
     # print(lm_result) #######################################################################################
-    if len(lm_result.face_landmarks) == 1:
+    if len(lm_result.face_landmarks) >= 1:
 
         # ========================
         # ========================
