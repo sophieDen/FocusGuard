@@ -277,7 +277,7 @@ def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration
 # centre =
 
 
-def gaze_direct_detect(lm_result, frame, c_threashold=0.1):
+def gaze_direct_detect(lm_result, frame, c_threashold=0.8):
 
     h, w, _ = frame.shape
 
