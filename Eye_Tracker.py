@@ -277,7 +277,7 @@ def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration
 # centre =
 
 
-def gaze_direct_detect(lm_result, frame, c_threashold=1e-8):
+def gaze_direct_detect(lm_result, frame, c_threashold=1e-4):
 
     h, w, _ = frame.shape
 
@@ -309,17 +309,19 @@ def gaze_direct_detect(lm_result, frame, c_threashold=1e-8):
 
     # looking direction logic
     # todo inclulde threashold logic to lrud to stop it being overridden
-
-    if full_gaze[0] < 0: # left
+    if full_gaze[0] < 0+c_threashold and full_gaze[0] > 0-c_threashold and full_gaze[1] < 0+c_threashold and full_gaze[1] > 0-c_threashold: # centre
         return 1
-    elif full_gaze[0] > 0: # right
-        return 2
     elif full_gaze[1] < 0: # up
-        return 3
+        return 2
     elif full_gaze[1] > 0: # down
+        return 3
+    elif full_gaze[0] < 0: # left
         return 4
-    elif full_gaze[0] < c_threashold and full_gaze[0] > c_threashold and full_gaze[1] < c_threashold and full_gaze[1] > c_threashold: # centre
+    elif full_gaze[0] > 0: # right
         return 5
+
+
+
 
 
 
