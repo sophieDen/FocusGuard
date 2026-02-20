@@ -320,7 +320,7 @@ def gaze_direct_detect(lm_result, frame, c_threashold=0.1):
     ud_abs = np.abs(full_gaze[1])
     lr_abs = np.abs(full_gaze[0])
 
-    if not up and not down and not left and not right: # centre
+    if (not up) and (not down) and (not left) and (not right): # centre
         return 1, full_gaze
     elif up and (ud_abs > lr_abs): # up
         return 2, full_gaze
