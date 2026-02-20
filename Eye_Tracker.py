@@ -309,16 +309,27 @@ def gaze_direct_detect(lm_result, frame, c_threashold=0.1):
 
     # looking direction logic
     # todo inclulde threashold logic to lrud to stop it being overridden
-    if full_gaze[0] < c_threashold and full_gaze[0] > c_threashold and full_gaze[1] < c_threashold and full_gaze[1] > c_threashold: # centre
-        return 1
-    elif full_gaze[1] < 0: # up
-        return 2
-    elif full_gaze[1] > 0: # down
-        return 3
-    elif full_gaze[0] < 0: # left
-        return 4
-    elif full_gaze[0] > 0: # right
-        return 5
+    # reduce to absolute values
+
+    up = full_gaze[1] < 0 - c_threashold
+    down = full_gaze[1] > 0 + c_threashold
+    right = full_gaze[0] < 0 - c_threashold # left on screen, right irl
+    left = full_gaze[0] > 0 + c_threashold # right on screen, left irl
+
+    # means that if the lower left right logic has the higher absolute value then they will be selected instead
+    ud_abs = np.abs(full_gaze[1])
+    lr_abs = np.abs(full_gaze[0])
+
+    if not up and not down and not left and not right: # centre
+        return 1, full_gaze
+    elif up and (ud_abs > lr_abs): # up
+        return 2, full_gaze
+    elif down and (ud_abs > lr_abs): # down
+        return 3, full_gaze
+    elif left: # right on screen, left irl
+        return 4, full_gaze
+    elif right: # left on screen, right irl
+        return 5, full_gaze
 
 
 
