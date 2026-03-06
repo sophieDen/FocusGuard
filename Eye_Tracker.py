@@ -24,7 +24,7 @@ from collections import Counter
 #
 #================================================================================
 #================================================================================
-#   '.tasks' is standard accross models, need base options to tell it what model
+#   '.tasks' is standard across models, need base options to tell it what model
 #================================================================================
 #================================================================================
 
@@ -244,7 +244,7 @@ def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration
     '''
 
     :param blink_threshold_func: gets True or False from last Func
-    :param staring_seconds: amount of time user is starig at the screen in frames
+    :param staring_seconds: amount of time user is staring at the screen in frames
     :param one_sec_n_frames: calculates the amount of frames per second
     :param staring_duration: how many secs spent staring
     :return:
@@ -277,7 +277,7 @@ def eye_staring_tracker(blink_threshold_func, one_sec_n_frames, staring_duration
 # centre =
 
 
-def gaze_direct_detect(lm_result, frame, c_threashold=0.8):
+def gaze_direct_detect(lm_result, frame, c_threshold=0.8):
 
     h, w, _ = frame.shape
 
@@ -311,10 +311,10 @@ def gaze_direct_detect(lm_result, frame, c_threashold=0.8):
     # todo inclulde threashold logic to lrud to stop it being overridden
     # reduce to absolute values
 
-    up = full_gaze[1] < 0 - c_threashold
-    down = full_gaze[1] > 0 + c_threashold
-    right = full_gaze[0] < 0 - c_threashold # left on screen, right irl
-    left = full_gaze[0] > 0 + c_threashold # right on screen, left irl
+    up = full_gaze[1] < 0 - c_threshold
+    down = full_gaze[1] > 0 + c_threshold
+    right = full_gaze[0] < 0 - c_threshold # left on screen, right irl
+    left = full_gaze[0] > 0 + c_threshold # right on screen, left irl
 
     # means that if the lower left right logic has the higher absolute value then they will be selected instead
     ud_abs = np.abs(full_gaze[1])
@@ -334,17 +334,42 @@ def gaze_direct_detect(lm_result, frame, c_threashold=0.8):
 
 
 
+gaze_down_frames = 0 # global variable - number of frames that user looks down
 
-
-
-def gaze_duration_detect():
+def gaze_duration_detect(lm_result, frame, one_sec_n_frames, gaze_threshold=5, c_threshold=0.8):
     '''
+    Looks at the amount of time the user looks down, and returns an alert if the gaze_threshold is exceeded.
+    :param lm_result: mediapipe face landmarking result
+    :param frame: current video frame
+    :param one_sec_n_frames: the number of frames over 1 second for the camera used
+    :param gaze_threshold: the max number of seconds that user can look down before being alerted
+    :param c_threshold:
+
     - need to include time checker - poss global again
     - need to reset each time that it changes over set frames
 
-    :return:
+    :return: warning if the user looks down for too long, or no alert if normal
     '''
-    pass
+
+    global gaze_down_frames
+
+    direction, full_gaze = gaze_direct_detect(lm_result, frame, c_threshold=0.8)
+    threshold_n_frames = one_sec_n_frames * gaze_threshold
+
+    if direction == 3:
+        gaze_down_frames += 1
+        if gaze_down_frames >= threshold_n_frames:
+            print("Looking down for too long. Are you sure you're still focused?")
+            return True
+    else:
+        gaze_down_frames = 0 # resets back to zero if user stops looking down
+        return False
+
+
+
+
+
+
 
 
 #=================
@@ -357,8 +382,6 @@ def rolling_temporal_memory(lm_le_range, lm_re_range, n_frames=50):
         del lm_le_range[1] # left second val
         del lm_re_range[0] # right first val
         del lm_re_range[1] # right second val
-
-
 
 
 
