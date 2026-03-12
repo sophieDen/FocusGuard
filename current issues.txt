@@ -1,0 +1,64 @@
+- breaks when face goes out of full range of mesh -- probs line 42
+
+- need to measure blinking/staring
+
+- need to track the pupil/ iris  to decide on the direction a person is looking
+
+- potentially have the wrong points (landmarks) - giving negative values
+
+- add frames to fps as metric of time count
+
+- eye sleeping threashold currently probably too strict criteria
+- maybe change vals to int for *h
+- need EAR for n_threashold and lm_le_range and lm_re_range and threashold in sleep
+ - EAR has been added
+
+
+
+
+
+
+
+
+
+
+- need to get index of eye vals in full_landmarks
+pre 2023
+- https://medium.com/%40asadullahdal/iris-segmentation-mediapipe-python-a4deb711aae3
+
+# Left eye indices list
+LEFT_EYE =[ 362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385,384, 398 ]
+# Right eye indices list
+RIGHT_EYE=[ 33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161 , 246 ]
+
+
+
+
+post 2023 - USE THESE
+
+- https://medium.com/%40Mert.A/detect-eyes-nose-and-mouth-with-mediapipe-bbfdf7a61f21
+
+LEFT_EYE_LANDMARKS = [463, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374,
+                           380, 381, 382, 362]  # Left eye landmarks
+
+RIGHT_EYE_LANDMARKS = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145,
+                            144, 163, 7]  # Right eye landmarks
+
+
+##### face mesh vals ######
+https://storage.googleapis.com/mediapipe-assets/documentation/mediapipe_face_landmark_fullsize.png
+
+# Left Eye
+
+    "ule": 386,  # upper left corner of left eye
+    "ure": 263,  # upper right corner of left eye
+    "lle": 374,  # lower left corner of left eye
+    "lre": 382,  # lower right corner of left eye
+
+
+# Right Eye
+    "ule": 159,  # upper left corner of right eye
+    "ure": 133,  # upper right corner of right eye
+    "lle": 145,  # lower left corner of right eye
+    "lre": 153,  # lower right corner of right eye
+
