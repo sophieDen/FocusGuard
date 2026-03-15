@@ -472,6 +472,9 @@ while True:
         # gaze direction checker
         print("g_direction:",gaze_direct_detect(lm_result=lm_result, frame=frame))
 
+        # gaze duration checker
+        print("g_duration: ", gaze_duration_detect(lm_result=lm_result, frame=frame, one_sec_n_frames=one_sec_n_frames, gaze_threshold=5, c_threshold=0.8))
+
 
 
 
