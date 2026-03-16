@@ -23,6 +23,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from core.base_detector import DetectionResult
 from modules.lighting.lighting_detector import LightingDetector
+from modules.gaze.gaze_detector import GazeDetector
 
 # from modules.gaze.gaze_detector import GazeDetector
 # from modules.posture.posture_detector import PostureDetector
@@ -123,7 +124,7 @@ class FocusGuardApp:
 
         self.detectors = {
             'lighting': LightingDetector(),
-            'gaze': None,      # placeholders
+            'gaze': GazeDetector(),      # placeholders
             'posture': None,   # placeholders
         }
         self.current_status = {'lighting': True, 'gaze': True, 'posture': True}

@@ -381,7 +381,7 @@ class GazeDetector(BaseDetector):
 
     # gaze_down_frames = 0 # global variable - number of frames that user looks down
 
-    def gaze_duration_detect(self, lm_result, frame, one_sec_n_frames, gaze_threshold=5, c_threshold=0.8):
+    def gaze_duration_detect(self, lm_result, frame, one_sec_n_frames, gaze_threshold=20, c_threshold=0.8):
         '''
         Looks at the amount of time the user looks down, and returns an alert if the gaze_threshold is exceeded.
         :param lm_result: mediapipe face landmarking result
