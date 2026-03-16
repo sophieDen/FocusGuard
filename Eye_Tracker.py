@@ -224,7 +224,7 @@ class MyGazeTracker():
     def eye_sleeping_threshold(self, lm_le_range, lm_re_range, one_sec_n_frames=40, threshold=0.15, s_duration=10): # needs to apply over time
         n_frames = one_sec_n_frames * s_duration
 
-        if np.mean(lm_le_range) <= threshold or np.mean(lm_re_range) <= threshold and len(lm_re_range) > n_frames :
+        if len(lm_re_range) > n_frames and (np.mean(lm_le_range) <= threshold or np.mean(lm_re_range) <= threshold): # FIXED adjusted logic to avoid Python operator precedence issues (and/or)
             # print(f"le len: {len(lm_le_range)}, re len: {len(lm_re_range)}")
             return True # sleeping
         else:
@@ -354,6 +354,8 @@ class MyGazeTracker():
             return 4, full_gaze
         elif right: # left on screen, right irl
             return 5, full_gaze
+        else:
+            return 1, full_gaze # FIXED default to centre gaze (handles cases like the user looking up-left / diagonally)
 
 
 
@@ -377,7 +379,7 @@ class MyGazeTracker():
 
         # global gaze_down_frames
 
-        direction, full_gaze = self.gaze_direct_detect(lm_result, frame, c_threshold=0.8)
+        direction, full_gaze = self.gaze_direct_detect(lm_result, frame, c_threshold=c_threshold) # FIXED removed hardcoded c_threshold = 0.8
         threshold_n_frames = one_sec_n_frames * gaze_threshold
 
         if direction == 3:
@@ -402,10 +404,8 @@ class MyGazeTracker():
 
     def rolling_temporal_memory(self, lm_le_range, lm_re_range, n_frames=50):
         if len(lm_le_range) > n_frames and len(lm_re_range) > n_frames: # arbitrary number threshold
-            del lm_le_range[0] # left first val
-            del lm_le_range[1] # left second val
-            del lm_re_range[0] # right first val
-            del lm_re_range[1] # right second val
+            del lm_le_range[:2] # FIXED changed to [:2] since indexes shift after deleting [0], therefore wrong indices deleted
+            del lm_re_range[:2] # FIXED changed to [:2] since indexes shift after deleting [0], therefore wrong indices deleted
 
 
 
@@ -431,6 +431,7 @@ class MyGazeTracker():
                 le_ear, re_ear = self.eye_range_vals(lm_result, frame)
                 self.lm_le_range.append(le_ear)
                 self.lm_re_range.append(re_ear)
+                self.rolling_temporal_memory(self.lm_le_range, self.lm_re_range, n_frames=int(one_sec_n_frames * GAZE_DROWSY_SECONDS)) # FIXED Added rolling_temporal_memory to run() function, and used GAZE_DROWSY_SECONDS as sleep threshold
 
                 if self.eye_sleeping_threshold(self.lm_le_range, self.lm_re_range, one_sec_n_frames):
                     self.alert.process(DetectionResult(
