@@ -9,6 +9,17 @@ from collections import Counter
 from alert import AlertManager
 from config import GAZE_DROWSY_EAR_THRESHOLD, GAZE_DROWSY_SECONDS, GAZE_DISTRACTION_SECONDS
 
+# IN SECONDS
+STARING_DURATION = 30
+SLEEPING_DURATION = 30
+D_GAZE_DURATION = 20
+
+
+
+
+
+
+
 # class GazeDetector(BaseDetector):
 #
 #     def analyze(self, frame: np.ndarray) -> DetectionResult:
@@ -242,7 +253,7 @@ class GazeDetector(BaseDetector):
     # basic sleep detection
     #========================
 
-    def eye_sleeping_threshold(self, lm_le_range, lm_re_range, one_sec_n_frames=40, threshold=0.15, s_duration=10): # needs to apply over time
+    def eye_sleeping_threshold(self, lm_le_range, lm_re_range, one_sec_n_frames=40, threshold=0.15, s_duration=SLEEPING_DURATION): # needs to apply over time
         n_frames = one_sec_n_frames * s_duration
 
         if np.mean(lm_le_range) <= threshold or np.mean(lm_re_range) <= threshold and len(lm_re_range) > n_frames :
@@ -285,7 +296,7 @@ class GazeDetector(BaseDetector):
             return False # not blinked
 
 
-    def eye_staring_tracker(self, blink_threshold_func, one_sec_n_frames, staring_duration=10):
+    def eye_staring_tracker(self, blink_threshold_func, one_sec_n_frames, staring_duration=STARING_DURATION):
         '''
 
         :param blink_threshold_func: gets True or False from last Func
@@ -381,7 +392,7 @@ class GazeDetector(BaseDetector):
 
     # gaze_down_frames = 0 # global variable - number of frames that user looks down
 
-    def gaze_duration_detect(self, lm_result, frame, one_sec_n_frames, gaze_threshold=20, c_threshold=0.8):
+    def gaze_duration_detect(self, lm_result, frame, one_sec_n_frames, gaze_threshold=D_GAZE_DURATION, c_threshold=0.8):
         '''
         Looks at the amount of time the user looks down, and returns an alert if the gaze_threshold is exceeded.
         :param lm_result: mediapipe face landmarking result
