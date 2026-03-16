@@ -59,10 +59,13 @@ from config import GAZE_DROWSY_EAR_THRESHOLD, GAZE_DROWSY_SECONDS, GAZE_DISTRACT
 
 class GazeDetector(BaseDetector):
     def __init__(self):
+
+        # dont touch unless you want it to crash
         base_options = python.BaseOptions(model_asset_path="models/face_landmarker.task")
         options = vision.FaceLandmarkerOptions(base_options=base_options)
         self.face_landmarker = vision.FaceLandmarker.create_from_options(options)
 
+        # all of the key vars that were further down
         self.lm_le_range = []
         self.lm_re_range = []
         self.gaze_down_frames = 0
