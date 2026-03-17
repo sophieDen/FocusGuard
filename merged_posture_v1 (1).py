@@ -36,28 +36,36 @@ light_green = (127, 233, 100)
 yellow = (0, 255, 255)
 pink = (255, 0, 255)
 
-# Path to the new downloaded .task file, 
-# An Object-Oriented API designed to deliver same experience across different platform (Android, iOS, etc.)
-model_path = r"C:\Users\PC\Documents\Masters\Computer Vision\PosturePro\python-app\pose_landmarker_full.task"
+# initialize pose landmarker
+pose_model_path = "C:/Users/PC/Documents/Masters/Computer Vision/FocusGuard/pose_landmarker_full.task"
 
-with open(model_path, 'rb') as f:
-    model_data = f.read()
+with open(pose_model_path, 'rb') as f:
+    pose_model_data = f.read()
 
-# Configure Options
-base_options = python.BaseOptions(model_asset_buffer=model_data)
-# References: https://ai.google.dev/edge/api/mediapipe/python/mp/tasks/vision/PoseLandmarkerOptions 
-options = vision.PoseLandmarkerOptions(
-    base_options=base_options,
-    running_mode=vision.RunningMode.VIDEO,   # Used Video for handling the frame captured through webcam 
+pose_base_options = python.BaseOptions(model_asset_buffer=pose_model_data)
+pose_options = vision.PoseLandmarkerOptions(
+    base_options=pose_base_options,
+    running_mode=vision.RunningMode.VIDEO,   
 )
+pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
 
-# Create the 'Detector' (The actual AI engine)
-detector = vision.PoseLandmarker.create_from_options(options)
+#initialize object detector
+obj_model_path = "C:/Users/PC/Documents/Masters/Computer Vision/FocusGuard/efficientdet_lite2.tflite" 
+
+obj_options = vision.ObjectDetectorOptions(
+    base_options=python.BaseOptions(model_asset_path=obj_model_path),
+    running_mode=vision.RunningMode.VIDEO, # Aligned with PoseLandmarker's mode
+    max_results=5, 
+    score_threshold=0.5, 
+    category_allowlist=['cell phone', 'chair']
+)
+obj_detector = vision.ObjectDetector.create_from_options(obj_options)
+
 
 if __name__ == "__main__":
-    cap = cv2.VideoCapture(0) # Open the connection to the hardware, 0 means the built-in webcam
+    cap = cv2.VideoCapture(0) 
 
-    if not cap.isOpened(): # Checking if the connection to the webcam is built
+    if not cap.isOpened(): 
         print("Error: Could not open video.")
         exit()
 
@@ -67,50 +75,91 @@ if __name__ == "__main__":
     frame_size = (width, height)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
-    video_output = cv2.VideoWriter('output.mp4', fourcc, fps, frame_size) # For saving video
+    video_output = cv2.VideoWriter('output.mp4', fourcc, fps, frame_size) 
+
+    # track continuous presence/absence for objects
+    phone_first_detected_time = None 
+    chair_missing_start_time = None 
 
     while True:
         successOrNot, image = cap.read() 
-        # read() return if the camera actually successfully grabbed a picture.
-        # And the image content
         if not successOrNot:
             print("Skipping empty frame.")
+            break
             
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
-        # To fix the color, as Mediapipe read img as RGB, but cv2 read it as BGR    
-
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
         
-        cuurent_times = int(time.time() * 1000) # Get the timestamp which is required for VIDEO mode
+        current_times = int(time.time() * 1000) 
 
-        # We store the answer in a new variable called 'results'
-        # References: https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/python#video_2 
-        results = detector.detect_for_video(mp_image, cuurent_times)
+        # process both pose and objects at same time
+        pose_results = pose_detector.detect_for_video(mp_image, current_times)
+        obj_results = obj_detector.detect_for_video(mp_image, current_times)
 
-        if not results.pose_landmarks:
+     # object detection part:
+        phone_detected_this_frame = False 
+        chair_detected_this_frame = False
+
+        if obj_results.detections:
+            for detection in obj_results.detections:
+                bbox = detection.bounding_box
+                start_point = (bbox.origin_x, bbox.origin_y)
+                end_point = (bbox.origin_x + bbox.width, bbox.origin_y + bbox.height)
+                
+                cv2.rectangle(image, start_point, end_point, (0, 255, 0), 2)
+                
+                category = detection.categories[0]
+                category_name = category.category_name
+                probability = round(category.score * 100, 1)
+                
+                if category_name == 'cell phone':
+                    phone_detected_this_frame = True
+                elif category_name == 'chair':
+                    chair_detected_this_frame = True
+                
+                label = f'{category_name} ({probability}%)'
+                cv2.putText(image, label, (start_point[0], start_point[1] - 10), 
+                            font, 0.5, (0, 255, 0), 2)
+        
+        # object detection message displaying
+        if phone_detected_this_frame:
+            if phone_first_detected_time is None:
+                phone_first_detected_time = time.time()
+            else:
+                time_on_screen = time.time() - phone_first_detected_time
+                if time_on_screen >= 5.0:
+                    cv2.putText(image, "Put away the phone!", (50, 80), 
+                                font, 1.2, red, 3, cv2.LINE_AA)
+        else:
+            phone_first_detected_time = None
+
+        if not chair_detected_this_frame:
+            if chair_missing_start_time is None:
+                chair_missing_start_time = time.time()
+            else:
+                time_missing = time.time() - chair_missing_start_time
+                if time_missing >= 10.0:
+                    cv2.putText(image, "Go find a nice chair!", (50, 130), 
+                                font, 1.2, (0, 165, 255), 3, cv2.LINE_AA)
+        else:
+            chair_missing_start_time = None
+
+
+        # pose detection part:
+        if not pose_results.pose_landmarks:
             cv2.putText(image, "No pose detected", (10, 30), font, 0.9, red, 2)
-            cv2.imshow('MediaPipe Pose', image)
+            cv2.imshow('MediaPipe Integrated App', image)
             if cv2.waitKey(5) & 0xFF == ord('q'):
                 break
             continue
 
-# ==========================================================================================================
-# ============================= TO GET THE KEY POINTS OF THE WHOLE BODY STRUCTURE ==========================
-# ==========================================================================================================
-
-# References: https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker 
-# Pose landmarker: 
-# 0: nose, 7: left ear, 8: right ear, 11: left shoulder, 12: right shoulder, 23: left hip
-        lm = results.pose_landmarks[0] # Get the list of the points for the first person detected.
-        
+        lm = pose_results.pose_landmarks[0] 
         h, w = image.shape[:2]
         
-        # Current mechanism: no shoulder leveling function, and 
         try:
-            # lm.landmark[11].x works also, but lm.landmark[lmPose.LEFT_SHOULDER].x prevents accidentally typing.
-            l_shldr_x = int(lm[11].x * w) # Multiply them by width or height to get exact pixel value on the img.
+            l_shldr_x = int(lm[11].x * w) 
             l_shldr_y = int(lm[11].y * h)
-            l_shldr_z = lm[11].z # z is not multiplied with width/height as it is a body proportion ratio.
+            l_shldr_z = lm[11].z 
             r_shldr_x = int(lm[12].x * w)
             r_shldr_y = int(lm[12].y * h)
             r_shldr_z = lm[12].z
@@ -120,26 +169,22 @@ if __name__ == "__main__":
             nose_y = int(lm[0].y * h)
             nose_z = lm[0].z
             
-            m_shldr_z = (l_shldr_z + r_shldr_z) / 2 # To get the middle of the body, preventing bias to one side shoulder
+            m_shldr_z = (l_shldr_z + r_shldr_z) / 2 
         
-            # New features 1: To check if user is leaning too close to the screen, "turtle neck" check!
             depth_diff = nose_z - m_shldr_z
-            
-            # New features 2: To check if user's both shoulder is on the same height.
-            shoulder_lvl_difference = abs(l_shldr_y - r_shldr_y) # If both shoulder's y coordinates has a large gap, indicates user is not sitting properly
+            shoulder_lvl_difference = abs(l_shldr_y - r_shldr_y) 
                   
-            # This check how wide a person's shoulder appears in the img and calculate the distance with the screen
-            offset = findDistance(lm[11].x, lm[11].y, lm[12].x, lm[12].y)
-             
-            # The logic of how does a good posture should look like
+            offset = findDistance(lm[11].x, lm[11].y, lm[12].x, lm[12].y)            
+            
+            # logic of how a good posture is like
             neck_inclination = findAngle(l_shldr_x, l_shldr_y, l_ear_x, l_ear_y) 
 
             angle_text_string = f"Neck : {int(neck_inclination)} Depth from nose to body: {round(float(depth_diff), 2)} Shoulder Level: {int(shoulder_lvl_difference)}"
             suggestions = ""
 
-            depth_threshold = -0.8 # Setting the depth threshold on proper sitting position.
+            depth_threshold = -0.8 # set depth threshold on proper sitting position.
              
-            # 1. Checking user's distance to the screen
+            # 1. checking user distance to the screen
             if offset > 0.5: 
                 color = yellow
                 suggestions = "Too close, please move back."
@@ -147,7 +192,7 @@ if __name__ == "__main__":
                 color = yellow
                 suggestions = "Too far, please move closer."
                 
-            # 2. If distance is ok proceed with checking:
+            # 2. distance is ok, proceed to check
             elif depth_diff < depth_threshold: # 2-1. Checking turtle neck
                 good_frames = 0
                 bad_frames += 1
@@ -174,8 +219,9 @@ if __name__ == "__main__":
                 good_frames = 1
                 bad_frames += 0
                 color = light_green
+ 
+    
                         
-            # Writes the text directly onto the pixels of the webcam frame.
             cv2.putText(image, angle_text_string, (10, 30), font, 0.7, color, 2)
 
             good_time = (1 / fps) * good_frames
@@ -184,13 +230,11 @@ if __name__ == "__main__":
             if bad_time > 30:
                 sendWarning()
 
-            # These draw the "skeleton" we see.
             if good_time > 0:
                 cv2.putText(image, f'Good Posture Time: {round(good_time, 1)}s', (10, h - 20), font, 0.7, green, 2)
             else:
                 cv2.putText(image, f'Bad Posture Time: {round(bad_time, 1)}s Reason: {suggestions}', (10, h - 20), font, 0.7, red, 2)
 
-            # These are the skeleton that we see 
             cv2.circle(image, (l_shldr_x, l_shldr_y), 7, yellow, -1) 
             cv2.circle(image, (l_ear_x, l_ear_y), 7, yellow, -1)
             cv2.circle(image, (nose_x, nose_y), 7, red, -1)
@@ -203,7 +247,7 @@ if __name__ == "__main__":
 
         video_output.write(image)
 
-        cv2.imshow('MediaPipe Pose', image)
+        cv2.imshow('MediaPipe Integrated App', image)
         
         if cv2.waitKey(5) & 0xFF == ord('q'):
             break
