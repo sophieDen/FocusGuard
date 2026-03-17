@@ -19,6 +19,8 @@ import math
 import sys
 import os
 
+from modules.posture.posture_detector import PostureDetector
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from core.base_detector import DetectionResult
@@ -123,7 +125,7 @@ class FocusGuardApp:
         self.detectors = {
             'lighting': LightingDetector(),
             'gaze': GazeDetector(),      # placeholders
-            'posture': None,   # placeholders
+            'posture': PostureDetector(),   # placeholders
         }
         self.current_status = {'lighting': True, 'gaze': True, 'posture': True}
         self.notifications = []
