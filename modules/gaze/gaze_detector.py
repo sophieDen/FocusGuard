@@ -22,7 +22,7 @@ ASSUMED_FPS       = 25     # fallback until real fps is measured
 class GazeDetector(BaseDetector):
     def __init__(self):
         model_path = Path(__file__).parent.parent.parent / "models" / "face_landmarker.task"
-        base_options = python.BaseOptions(model_asset_path="models/face_landmarker.task")
+        base_options = python.BaseOptions(model_asset_path=str(model_path))
         options      = vision.FaceLandmarkerOptions(base_options=base_options)
         self.face_landmarker = vision.FaceLandmarker.create_from_options(options)
 
