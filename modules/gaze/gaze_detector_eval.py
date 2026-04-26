@@ -1,21 +1,22 @@
 import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 
-# Datasets
-
-# 1. MRL Eye Dataset (Kaggle)
+# DATASETS
+# 1. Drowsiness Dataset (Driver Drowsiness Dataset - Kaggle)
 import kagglehub
 
 path1 = kagglehub.dataset_download("ismailnasri20/driver-drowsiness-dataset-ddd")
 
-print("Path to dataset files:", path1)
+# print("Path to dataset files:", path1)
+
+# 2.
 
 # ---------------------------------------
 
 # Reporting Functions
-def eval_report(y_true, y_pred, label=""):
+def eval_report(y_true, y_pred, target_names, label=""):
     print(f'\n==== {label} ====')
-    print(classification_report(y_true, y_pred, target_names=["ALERT", "DROWSY"])) # 'ALERT' in this case refers to alertness
+    print(classification_report(y_true, y_pred, target_names=target_names)) # 'ALERT' in this case refers to alertness
     print('Confusion Matrix (ROWS = TRUE, COLS = PRED):\n')
     print(confusion_matrix(y_true, y_pred))
 
@@ -24,7 +25,8 @@ def multiclass_report(y_true, y_pred, label_names, label=''):
     print(classification_report(
         y_true, y_pred,
         labels=list(range(len(label_names))),
-        target_names=label_names
+        target_names=label_names,
+        zero_division=0
     ))
     print('Confusion Matrix (ROWS = TRUE, COLS = PRED):\n')
     print(confusion_matrix(y_true, y_pred))
@@ -67,13 +69,13 @@ def drowsiness_eval_func():
 
     y_true_all, y_pred_all = [], []
 
-    # ── Diagnostic counters ───────────────────────────────────────────────────
+    # Counters ---------
     n_images_found      = sum(len(v) for v in participant_imgs.values())
     n_load_failed       = 0
     n_no_face           = 0
     n_warmup_skipped    = 0
     n_collected         = 0
-    # ─────────────────────────────────────────────────────────────────────────
+    # ------------------------------
 
     for participant_id, items in participant_imgs.items():
         detector = GazeDetector()
@@ -94,7 +96,7 @@ def drowsiness_eval_func():
             detector.lm_re_range.append(re)
 
             predicted = detector.eye_sleeping_threshold(
-                detector.lm_le_range, detector.lm_re_range, fps=fps_fixed)
+                detector.lm_le_range, detector.lm_re_range, fps=fps_fixed, s_duration=1) # Using a shorter sleeping duration threshold for evaluation with image dataset instead of videos
 
             if predicted is None:
                 n_warmup_skipped += 1
@@ -104,27 +106,21 @@ def drowsiness_eval_func():
             y_pred_all.append(int(predicted))
             n_collected += 1
 
-    # ── Print diagnostic summary ──────────────────────────────────────────────
-    print(f"\n--- Diagnostic Summary ---")
+    # Summary -----------------------------------
+    print(f"\n--- Summary ---")
     print(f"  Images found in dataset : {n_images_found}")
     print(f"  Failed to load (cv2)    : {n_load_failed}")
     print(f"  No face detected        : {n_no_face}")
     print(f"  Skipped (buffer warmup) : {n_warmup_skipped}")
     print(f"  Collected for eval      : {n_collected}")
-    # ─────────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------
 
     if not y_true_all:
         print('No predictions collected - check that MediaPipe is detecting faces.')
 
-    # # Progress checker:
-    # total = len(y_true_all)
-    # correct = sum(t == p for t, p in zip(y_true_all, y_pred_all))
-    # print(f'\nFrames evaluated: {total} | Raw accuracy: {correct/total:.1%}')
+    eval_report(y_true_all, y_pred_all, label='Drowsiness Evaluation (EAR Threshold) - DDD (Dataset)', target_names=["ALERT", "DROWSY"])
 
 
-    eval_report(y_true_all, y_pred_all, label='Drowsiness Evaluation (EAR Threshold) - DDD (Dataset)')
-
-
-if __name__ == '__main__':
-    drowsiness_eval_func()
+# if __name__ == '__main__':
+#     drowsiness_eval_func()
 
