@@ -8,6 +8,7 @@ import time
 from collections import deque
 from alert import AlertManager
 from config import GAZE_DROWSY_EAR_THRESHOLD, GAZE_DROWSY_SECONDS, GAZE_DISTRACTION_SECONDS
+from pathlib import Path
 
 # IN SECONDS — lower these for faster testing
 STARING_DURATION  = 7
@@ -20,6 +21,7 @@ ASSUMED_FPS       = 25     # fallback until real fps is measured
 
 class GazeDetector(BaseDetector):
     def __init__(self):
+        model_path = Path(__file__).parent / "models" / "face_landmarker.task"
         base_options = python.BaseOptions(model_asset_path="models/face_landmarker.task")
         options      = vision.FaceLandmarkerOptions(base_options=base_options)
         self.face_landmarker = vision.FaceLandmarker.create_from_options(options)
