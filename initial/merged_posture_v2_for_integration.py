@@ -63,7 +63,7 @@ class PostureDetector(BaseDetector):
         self.phone_first_detected_time  = None
         self.chair_missing_start_time   = None
         self._last_warning              = ""        # track last warning to re-trigger on change
-
+        
         # ── Calibration & Smoothing State ────────────────────────────────────
         self.is_calibrated         = False
         self.base_depth            = 0.0
@@ -160,16 +160,16 @@ class PostureDetector(BaseDetector):
             nose_z    = lm[0].z
 
             m_shldr_z           = (l_shldr_z + r_shldr_z) / 2
-
+            
             # --- Moving Average Filter for Z-axis noise ---
             raw_depth_diff = nose_z - m_shldr_z
             self.depth_history.append(raw_depth_diff)
             if len(self.depth_history) > 10:
                 self.depth_history.pop(0)
-
+            
             depth_diff = sum(self.depth_history) / len(self.depth_history)
             # ----------------------------------------------
-
+            
             shoulder_lvl_diff   = abs(l_shldr_y - r_shldr_y)
             offset              = findDistance(lm[11].x, lm[11].y, lm[12].x, lm[12].y)
             neck_inclination    = findAngle(l_shldr_x, l_shldr_y, l_ear_x, l_ear_y)
@@ -196,7 +196,7 @@ class PostureDetector(BaseDetector):
         # ── Classify posture ─────────────────────────────────────────────────
         z_delta = self.base_depth - depth_diff
         issue = ""
-
+        
         if offset > (self.base_offset + self.OFFSET_MARGIN):
             issue = "Too close, please move back."
         elif offset < (self.base_offset - self.OFFSET_MARGIN):

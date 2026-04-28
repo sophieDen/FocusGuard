@@ -19,7 +19,6 @@ LIGHTING_BRIGHT_PIXEL_THRESHOLD = 170 # Pixels above this = "bright"
 LIGHTING_CONTRAST_THRESHOLD  = 80    # Difference between center and periphery
 LIGHTING_CENTER_RATIO = 0.3          # Central 30% of frame (face/screen area)
 
-
 # Gaze thresholds
 GAZE_DISTRACTION_SECONDS     = 3.0   # seconds looking away before warning
 GAZE_DROWSY_EAR_THRESHOLD    = 0.25  # eye aspect ratio below = drowsy
