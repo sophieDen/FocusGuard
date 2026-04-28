@@ -27,12 +27,11 @@ class PostureDetector(BaseDetector):
     NO_CHAIR_SECONDS     = 5
 
     # posture thresholds
-    DEPTH_THRESHOLD      = -0.8
+    Z_DELTA_THRESHOLD    = 0.02
     NECK_MAX             = 35
     NECK_MIN             = 15
     SHOULDER_DIFF_MAX    = 20
-    OFFSET_TOO_CLOSE     = 0.5
-    OFFSET_TOO_FAR       = 0.3
+    OFFSET_MARGIN        = 0.15
 
     def __init__(self):
         # ── Pose landmarker (IMAGE mode — one frame at a time) ──────────────
@@ -64,6 +63,14 @@ class PostureDetector(BaseDetector):
         self.phone_first_detected_time  = None
         self.chair_missing_start_time   = None
         self._last_warning              = ""        # track last warning to re-trigger on change
+
+        # ── Calibration & Smoothing State ────────────────────────────────────
+        self.is_calibrated         = False
+        self.base_depth            = 0.0
+        self.base_neck             = 0.0
+        self.base_shoulder_lvl     = 0.0
+        self.base_offset           = 0.0
+        self.depth_history         = []
 
     # =========================================================================
     #   analyze() — called per-frame by the main pipeline
@@ -153,7 +160,16 @@ class PostureDetector(BaseDetector):
             nose_z    = lm[0].z
 
             m_shldr_z           = (l_shldr_z + r_shldr_z) / 2
-            depth_diff          = nose_z - m_shldr_z
+
+            # --- Moving Average Filter for Z-axis noise ---
+            raw_depth_diff = nose_z - m_shldr_z
+            self.depth_history.append(raw_depth_diff)
+            if len(self.depth_history) > 10:
+                self.depth_history.pop(0)
+
+            depth_diff = sum(self.depth_history) / len(self.depth_history)
+            # ----------------------------------------------
+
             shoulder_lvl_diff   = abs(l_shldr_y - r_shldr_y)
             offset              = findDistance(lm[11].x, lm[11].y, lm[12].x, lm[12].y)
             neck_inclination    = findAngle(l_shldr_x, l_shldr_y, l_ear_x, l_ear_y)
@@ -162,17 +178,36 @@ class PostureDetector(BaseDetector):
             print(f"[posture] landmark error: {e}")
             return DetectionResult(module_name="posture", is_ok=True, warning_message="", confidence=1.0)
 
+        # ── Calibration Trigger ──────────────────────────────────────────────
+        key = cv2.waitKey(1)
+        if key & 0xFF == ord('c'):
+            self.base_depth = depth_diff
+            self.base_neck = neck_inclination
+            self.base_shoulder_lvl = shoulder_lvl_diff
+            self.base_offset = offset
+            self.is_calibrated = True
+
+        if not self.is_calibrated:
+            return DetectionResult(
+                module_name="posture", is_ok=False,
+                warning_message="SIT STRAIGHT & PRESS 'C' TO CALIBRATE", confidence=1.0
+            )
+
         # ── Classify posture ─────────────────────────────────────────────────
+        z_delta = self.base_depth - depth_diff
         issue = ""
-        if offset > self.OFFSET_TOO_CLOSE:
-            issue = "Too close to the camera, move back."
-        elif offset < self.OFFSET_TOO_FAR:
-            issue = "Too far from the camera, move closer."
-        elif depth_diff < self.DEPTH_THRESHOLD:
-            issue = "Don't lean forward (turtle neck)!"
-        elif shoulder_lvl_diff > self.SHOULDER_DIFF_MAX:
+
+        if offset > (self.base_offset + self.OFFSET_MARGIN):
+            issue = "Too close, please move back."
+        elif offset < (self.base_offset - self.OFFSET_MARGIN):
+            issue = "Too far, please move closer."
+        elif z_delta > self.Z_DELTA_THRESHOLD:
+            issue = "Don't lean forward (Turtle neck)!"
+        elif abs(shoulder_lvl_diff - self.base_shoulder_lvl) > self.SHOULDER_DIFF_MAX:
             issue = "Your shoulders are uneven."
-        elif not (self.NECK_MIN <= neck_inclination <= self.NECK_MAX):
+        elif neck_inclination > self.NECK_MAX:
+            issue = "Straighten your neck."
+        elif neck_inclination < self.NECK_MIN:
             issue = "Straighten your neck."
 
         if issue:

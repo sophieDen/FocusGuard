@@ -1,9 +1,0 @@
-Workable solutions:
-1. https://github.com/tanisheesh/PosturePro
-
-- A bit inaccurate in detecting front facing view, further improvement needed.
-- Also need to think of the novelty inside, how to make it cater more to our specific use-case.
-  = Corporate privacy element, to block camera access if no user detected, etc?
-  = Implement a focus-score metric, which evaluate user's sitting posture over certain time period?
-  = Set a mechanism for advicing user to switch posture / exercise a bit if user has been in a fixed position for too long?
- 

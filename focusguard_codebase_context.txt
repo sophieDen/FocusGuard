@@ -1,0 +1,530 @@
+================================================================
+FOCUSGUARD — FULL CODEBASE CONTEXT FOR REPORT WRITING
+================================================================
+Project: FocusGuard
+Language: Python 3
+Purpose: Real-time wellness and productivity monitoring using webcam + computer vision
+Team: Sophie Denysiuk (lighting), Issa & Brad (gaze), Jin & Penghui (posture)
+================================================================
+
+
+----------------------------------------------------------------
+1. PROJECT OVERVIEW
+----------------------------------------------------------------
+FocusGuard is a desktop application that monitors a user's physical
+health and focus habits during work sessions using their webcam. It
+runs three independent computer vision detectors in real time:
+
+  - Posture Detector: checks body position, neck angle, phone use, seating
+  - Gaze Detector: monitors eye health, drowsiness, blinking, and attention
+  - Lighting Detector: analyzes ambient light quality in the workspace
+
+All three detectors run on every webcam frame and feed into a shared
+alert system that surfaces warnings to the user through either a
+terminal output (CLI mode) or a polished GUI (Frontend mode).
+
+The application can be run two ways:
+  - python main.py          → CLI/debug mode (raw camera window, terminal alerts)
+  - python Frontend.py      → Full GUI with session timer, live feed, notifications
+
+
+----------------------------------------------------------------
+2. PROJECT STRUCTURE
+----------------------------------------------------------------
+
+FocusGuard/
+├── main.py                          Entry point (CLI mode)
+├── Frontend.py                      Full Tkinter GUI
+├── alert.py                         Alert manager (cooldown/spam prevention)
+├── config.py                        All thresholds and camera settings
+│
+├── core/
+│   ├── base_detector.py             Abstract base class + DetectionResult dataclass
+│   └── monitor.py                   Main frame loop / orchestrator
+│
+├── modules/
+│   ├── lighting/
+│   │   └── lighting_detector.py     Histogram-based lighting analysis
+│   ├── gaze/
+│   │   └── gaze_detector.py         Eye tracking, EAR, gaze direction
+│   └── posture/
+│       └── posture_detector.py      Pose landmarks + object detection (v2, calibrated)
+│
+├── models/
+│   ├── face_landmarker.task         MediaPipe face landmark model (~30MB)
+│   ├── pose_landmarker_full.task    MediaPipe body pose model
+│   └── efficientdet_lite2.tflite   TensorFlow object detection model
+│
+├── merged_posture_v2.py             Standalone dev/test version of posture detector
+└── merged_posture_v2_for_integration.py   Integration-ready v2 posture detector
+
+
+----------------------------------------------------------------
+3. CORE FRAMEWORK
+----------------------------------------------------------------
+
+--- core/base_detector.py ---
+
+Defines the contract every detector must follow.
+
+  @dataclass
+  class DetectionResult:
+      module_name: str       # "lighting", "gaze", or "posture"
+      is_ok: bool            # True = no issue, False = warning needed
+      warning_message: str   # Human-readable message for the user
+      confidence: float      # 0.0 to 1.0
+      extra: Optional[dict]  # Module-specific data (optional)
+
+  class BaseDetector(ABC):
+      @abstractmethod
+      def analyze(self, frame: np.ndarray) -> DetectionResult:
+          pass
+
+All three detectors inherit BaseDetector and implement analyze().
+The monitor only ever calls analyze() — no detector is coupled to
+any other part of the system.
+
+
+--- core/monitor.py ---
+
+FocusGuardMonitor is the main execution loop:
+  - Opens the webcam via OpenCV (VideoCapture)
+  - Uses settings from config.py (640x480, 15 FPS target)
+  - For every frame, calls analyze() on each detector sequentially
+  - Passes each DetectionResult to AlertManager
+  - If one detector raises an exception, the others keep running
+  - Shows the raw webcam feed in a debug window
+  - Press Q to quit
+  - Sleeps adaptively to maintain the target FPS
+
+
+--- main.py ---
+
+  detectors = [LightingDetector(), GazeDetector(), PostureDetector()]
+  monitor = FocusGuardMonitor(detectors)
+  monitor.run()
+
+This is the only file that wires everything together in CLI mode.
+
+
+--- alert.py (AlertManager) ---
+
+Prevents alert spam by enforcing a cooldown per module:
+  - Default cooldown: 20 seconds (set in config.py)
+  - Tracks last-alerted timestamp separately for each module
+  - process(result) returns True only if cooldown has expired
+  - Currently prints to terminal; designed to hook into the frontend
+
+
+--- config.py ---
+
+Central configuration file. All tunable values live here:
+
+  Camera:
+    CAMERA_INDEX = 0
+    FRAME_WIDTH  = 640
+    FRAME_HEIGHT = 480
+    TARGET_FPS   = 15
+
+  Lighting thresholds:
+    LIGHTING_DARK_THRESHOLD        = 60    (mean brightness below = too dark)
+    LIGHTING_BRIGHT_THRESHOLD      = 200   (mean brightness above = too bright)
+    LIGHTING_LOW_INTENSITY_RATIO   = 0.7   (70%+ dark pixels = too dark)
+    LIGHTING_HIGH_INTENSITY_RATIO  = 0.5   (50%+ bright pixels = too bright)
+    LIGHTING_DARK_PIXEL_THRESHOLD  = 85    (pixel intensity cutoff for "dark")
+    LIGHTING_BRIGHT_PIXEL_THRESHOLD= 170   (pixel intensity cutoff for "bright")
+    LIGHTING_CONTRAST_THRESHOLD    = 80    (center vs periphery difference)
+    LIGHTING_CENTER_RATIO          = 0.3   (30% of frame = "center")
+
+  Gaze thresholds:
+    GAZE_DISTRACTION_SECONDS = 3.0
+    GAZE_DROWSY_EAR_THRESHOLD = 0.25
+    GAZE_DROWSY_SECONDS = 2.0
+
+  Alert:
+    ALERT_COOLDOWN_SECONDS = 20
+
+
+----------------------------------------------------------------
+4. LIGHTING DETECTOR
+----------------------------------------------------------------
+File: modules/lighting/lighting_detector.py
+Author: Sophie Denysiuk
+
+Approach: Histogram-based brightness analysis of grayscale webcam frames.
+
+Steps per frame:
+  1. Convert frame to grayscale
+  2. Compute normalized 256-bin histogram (pixel intensity distribution)
+  3. Calculate overall metrics: mean, median, std of brightness
+  4. Calculate dark_pixels_ratio (fraction of pixels with intensity 0-85)
+  5. Calculate bright_pixels_ratio (fraction of pixels with intensity 170-255)
+  6. Divide frame into center (30% radius) and periphery regions
+  7. Calculate average brightness of center vs periphery separately
+  8. Apply decision logic in priority order:
+
+Priority 1 — High contrast (most harmful):
+  Condition: center_brightness - periphery_brightness > 80
+             AND periphery_brightness < 60
+  Meaning: Bright screen / face in a dark room
+  Warning: "High contrast detected: Your screen is bright (X) but the room
+            is dark (Y). This causes severe eye strain. Turn on ambient lighting!"
+
+Priority 2 — Too dark overall:
+  Condition: dark_pixels_ratio > 0.7 OR mean_brightness < 60
+  Warning: "Room is too dark (brightness: X/255, Y% dark pixels).
+            Increase ambient lighting to reduce eye strain."
+
+Priority 3 — Too bright overall:
+  Condition: bright_pixels_ratio > 0.5 OR mean_brightness > 200
+  Warning: "Room is too bright (brightness: X/255, Y% bright pixels).
+            Reduce glare or close blinds to prevent eye discomfort."
+
+Confidence scoring:
+  Uses _calculate_confidence() — normalizes how far the measured value
+  exceeds the threshold, on a 0.0–1.0 scale.
+
+All DetectionResults include an 'extra' dict with full metrics:
+  issue_type, mean_brightness, median_brightness, std_brightness,
+  center_brightness, periphery_brightness, contrast_difference,
+  dark_pixels_ratio, bright_pixels_ratio, histogram (full 256-bin array)
+
+
+----------------------------------------------------------------
+5. GAZE DETECTOR
+----------------------------------------------------------------
+File: modules/gaze/gaze_detector.py
+Authors: Issa & Brad
+
+Model: MediaPipe face_landmarker.task (468 facial landmarks including irises)
+
+Key constants:
+  EAR_THRESHOLD    = 0.20   (eye considered closed below this)
+  STARING_DURATION = 7      (seconds without blink = staring alert)
+  SLEEPING_DURATION= 3      (seconds of low EAR = drowsy alert)
+  D_GAZE_DURATION  = 5      (seconds looking away = distraction alert)
+
+State maintained per session:
+  lm_le_range / lm_re_range  — rolling EAR value buffers for each eye
+  gaze_down_frames           — consecutive frames where gaze is away
+  staring_seconds            — frame counter for staring detection
+  _frame_times               — deque(maxlen=60) for rolling FPS estimation
+
+FPS estimation:
+  Uses a rolling 60-frame window of timestamps rather than a session
+  average. This gives accurate real-time FPS even if the camera slows down.
+
+Eye Aspect Ratio (EAR):
+  Calculated using 6 facial landmarks per eye (corners + top/bottom edges):
+    EAR = (|p2-p6| + |p3-p5|) / (2 * |p1-p4|)
+  A value below 0.20 indicates a closed eye.
+
+Drowsiness detection (eye_sleeping_threshold):
+  Computes the average EAR over the last N frames (fps * SLEEPING_DURATION).
+  If the rolling average for either eye falls below EAR_THRESHOLD for 3+
+  continuous seconds, fires: "You look tired!"
+
+Staring detection (eye_staring_tracker):
+  Detects whether the user has blinked recently using eye_blink_threshold().
+  If no blink detected within 7 seconds, fires: "Remember to blink!"
+
+Gaze direction (gaze_direct_detect):
+  Computes a gaze vector for each eye using:
+    iris_position - eye_center
+  Combines left and right gaze vectors into a single normalized direction.
+  Classifies into 5 directions: centre(1), up(2), down(3), left(4), right(5)
+  Note: "up" (2) is excluded from "looking away" because the iris naturally
+  sits slightly above eye center when looking at a screen.
+
+Distraction detection (gaze_duration_detect):
+  If gaze is classified as down/left/right for 5+ consecutive seconds,
+  fires: "You've been looking away from the screen too long!"
+
+Rolling temporal memory:
+  Trims EAR buffers to keep only the frames needed for the longest
+  detection window, preventing unbounded memory growth.
+
+analyze() priority order:
+  1. Drowsiness check
+  2. Staring/blink check
+  3. Gaze direction check
+  Returns OK if none triggered.
+
+
+----------------------------------------------------------------
+6. POSTURE DETECTOR (v2 — calibrated)
+----------------------------------------------------------------
+File: modules/posture/posture_detector.py
+Authors: Jin & Penghui (original), extended with v2 improvements
+
+Models used:
+  - pose_landmarker_full.task    (MediaPipe, 33 body pose landmarks)
+  - efficientdet_lite2.tflite    (TensorFlow EfficientDet, object detection)
+
+Class constants (thresholds):
+  BAD_POSTURE_SECONDS = 3       (seconds of bad posture before warning)
+  PHONE_SECONDS       = 5       (seconds phone visible before warning)
+  NO_CHAIR_SECONDS    = 5       (seconds chair missing before warning)
+  Z_DELTA_THRESHOLD   = 0.02    (relative forward lean threshold — post calibration)
+  NECK_MAX            = 35      (degrees, neck too far forward)
+  NECK_MIN            = 15      (degrees, neck too far back)
+  SHOULDER_DIFF_MAX   = 20      (pixels, shoulder unevenness)
+  OFFSET_MARGIN       = 0.15    (shoulder width delta for distance check)
+
+State maintained per session:
+  bad_frames / good_frames       — frame counters for temporal gating
+  fps_estimate                   — rolling FPS (frame_count / elapsed)
+  phone_first_detected_time      — timestamp of first phone detection
+  chair_missing_start_time       — timestamp of first missing chair
+  _last_warning                  — prevents re-firing identical warnings
+  is_calibrated                  — False until user presses 'C'
+  base_depth / base_neck / base_shoulder_lvl / base_offset  — calibration snapshot
+  depth_history                  — list of last 10 raw Z depth values (smoothing)
+
+--- MAJOR V2 IMPROVEMENT 1: Per-User Calibration ---
+  The original version used hardcoded absolute thresholds (e.g., depth < -0.8).
+  v2 requires the user to press 'C' to calibrate their baseline posture.
+  Until calibration, the detector returns:
+    "SIT STRAIGHT & PRESS 'C' TO CALIBRATE"
+
+  On calibration, it captures:
+    base_depth         — current nose-to-shoulder Z depth
+    base_neck          — current neck angle
+    base_shoulder_lvl  — current shoulder height difference
+    base_offset        — current inter-shoulder distance (proxy for camera distance)
+
+  All subsequent checks are relative to these captured values:
+    z_delta     = base_depth - depth_diff        (forward lean relative to baseline)
+    offset diff = current_offset vs base_offset  (distance change relative to baseline)
+    shoulder diff = current vs base_shoulder_lvl
+
+  This means the detector adapts to each person's natural posture,
+  making it far more accurate and reducing false positives.
+
+--- MAJOR V2 IMPROVEMENT 2: Z-Axis Moving Average Filter ---
+  MediaPipe's Z-axis (depth) estimates are noisy.
+  The original version used raw depth values, causing false turtle-neck alerts.
+  v2 applies a 10-frame moving average:
+    depth_history.append(raw_depth_diff)
+    if len(depth_history) > 10: depth_history.pop(0)
+    depth_diff = sum(depth_history) / len(depth_history)
+  This smooths out frame-to-frame jitter before any threshold comparisons.
+
+Object detection (_check_objects):
+  Runs EfficientDet on every frame, looking for "cell phone" and "chair".
+  - Phone present for 5+ continuous seconds → "Put away the phone!"
+  - Chair absent for 5+ continuous seconds → "Go find a nice chair!"
+  Object warnings take priority and short-circuit posture analysis.
+
+Posture checks (_check_posture), in priority order:
+  1. Too close:   offset > base_offset + 0.15 → "Too close, please move back."
+  2. Too far:     offset < base_offset - 0.15 → "Too far, please move closer."
+  3. Turtle neck: z_delta > 0.02             → "Don't lean forward (Turtle neck)!"
+  4. Shoulders:   |diff - base_shoulder_lvl| > 20 → "Your shoulders are uneven."
+  5. Neck angle:  inclination > 35 or < 15   → "Straighten your neck."
+
+Temporal gating:
+  Bad posture must persist for BAD_POSTURE_SECONDS (3s) before a warning fires.
+  good_frames resets bad_frames counter and clears _last_warning.
+  _last_warning prevents the same message from re-firing continuously.
+
+Landmark indices used (MediaPipe pose):
+  11 = left shoulder, 12 = right shoulder, 7 = left ear, 0 = nose
+
+
+----------------------------------------------------------------
+7. POSTURE DETECTOR — VERSION HISTORY
+----------------------------------------------------------------
+
+Version 1 (original modules/posture/posture_detector.py):
+  - Used absolute hardcoded thresholds (DEPTH_THRESHOLD = -0.8)
+  - No smoothing on Z-axis data
+  - Checks ran immediately on startup
+  - All users compared against the same fixed values regardless of body type
+    or camera position
+
+Version 2 (merged_posture_v2.py — standalone development file):
+  - Standalone script, not class-based
+  - Hardcoded Windows file paths (C:/Users/PC/...)
+  - Runs in VIDEO mode (uses detect_for_video() with ms timestamps)
+  - Draws visual overlays on frames (skeleton lines, landmark dots, on-screen text)
+  - Saves output to output.mp4
+  - Fires bad posture warning after 30 seconds (not 3)
+  - Chair-missing fires after 10 seconds (not 5)
+  - Introduces calibration system (press 'C')
+  - Introduces 10-frame moving average for Z-axis
+  - Shows model confidence (avg landmark visibility) on screen
+  - Global variables, not encapsulated in a class
+
+Version 2 for Integration (merged_posture_v2_for_integration.py → now live):
+  - Ports v2 improvements into the class-based BaseDetector architecture
+  - Runs in IMAGE mode (same as original, compatible with pipeline)
+  - Calibration system included
+  - Moving average filter included
+  - Relative thresholds (z_delta, offset margin) instead of absolute
+  - Replaced DEPTH_THRESHOLD = -0.8 with Z_DELTA_THRESHOLD = 0.02
+  - All object detection and temporal gating logic preserved from v1
+  - This is the version now in production in modules/posture/posture_detector.py
+
+
+----------------------------------------------------------------
+8. FRONTEND (GUI MODE)
+----------------------------------------------------------------
+File: Frontend.py
+
+Framework: Tkinter + Pillow
+Design aesthetic: Sokcho editorial — soft pastel gradients (blush/sky-blue),
+frosted-glass card effects, translucent orb decorations, airy typography.
+
+Screens:
+
+  Welcome Screen:
+    - "Focus" + "Guard" editorial branding
+    - Input fields: focus duration (default 25 min), break duration (default 5 min)
+    - "Begin Focus Session" button
+
+  Monitoring Screen:
+    - Top bar: session info, END SESSION button
+    - Left panel: live camera feed (640x480)
+    - Right panel: notification feed (last 5 alerts with timestamps)
+    - Bottom bar:
+        * Elapsed session timer (HH:MM:SS)
+        * Status indicator dots, one per module:
+            Green (#7abfaa) = OK
+            Red   (#c97a7a) = Warning
+          Modules shown: posture, gaze, lighting
+
+  Session management:
+    - Auto-alerts when focus duration expires
+    - Option to start break or continue working
+    - Session summary on exit
+
+  Camera loop (update_camera_feed):
+    - Reads frames at ~15 FPS
+    - Calls run_detections() on each frame
+    - Updates status dots and notification feed based on results
+    - Renders frame in the live camera panel
+
+
+----------------------------------------------------------------
+9. TECHNOLOGIES AND LIBRARIES
+----------------------------------------------------------------
+
+Library            Version    Purpose
+---------          -------    -------
+opencv-python      4.8.1      Camera capture, frame processing, grayscale, histogram
+mediapipe          0.10.8     Face landmarks (468pts), body pose (33pts)
+tensorflow         2.15.0     EfficientDet object detection (phone/chair)
+numpy              1.24.3     Array math, EAR calculation, histogram analysis
+tkinter            built-in   GUI framework
+Pillow             10.1.0     Gradient generation, image blending for UI
+pytest             7.4.3      Unit testing
+matplotlib         3.8.2      Plotting (utility/testing)
+
+ML Models (pre-downloaded, in /models/):
+  face_landmarker.task         MediaPipe face landmark model (468 landmarks + iris)
+  pose_landmarker_full.task    MediaPipe pose model (33 body landmarks with Z-depth)
+  efficientdet_lite2.tflite    TensorFlow Lite object detector (COCO classes)
+
+
+----------------------------------------------------------------
+10. DATA FLOW (end to end)
+----------------------------------------------------------------
+
+  Webcam frame (BGR, 640x480)
+       |
+       v
+  FocusGuardMonitor.run()
+       |
+       +---> LightingDetector.analyze(frame)
+       |           |-- grayscale conversion
+       |           |-- histogram analysis
+       |           |-- center vs periphery comparison
+       |           └-- returns DetectionResult
+       |
+       +---> GazeDetector.analyze(frame)
+       |           |-- BGR to RGB conversion
+       |           |-- MediaPipe face landmark detection
+       |           |-- EAR calculation for both eyes
+       |           |-- drowsiness / staring / gaze direction checks
+       |           └-- returns DetectionResult
+       |
+       +---> PostureDetector.analyze(frame)
+       |           |-- BGR to RGB conversion
+       |           |-- EfficientDet object detection (phone/chair)
+       |           |-- MediaPipe pose landmark detection
+       |           |-- Z-axis smoothing (moving average)
+       |           |-- calibration check / threshold comparison
+       |           └-- returns DetectionResult
+       |
+       v
+  AlertManager.process(result) [for each result]
+       |-- if is_ok: skip
+       |-- if cooldown active: skip
+       |-- else: print warning + update last_alerted timestamp
+       |
+       v
+  Frontend (if running): update status dots + notification feed
+
+
+----------------------------------------------------------------
+11. KEY DESIGN DECISIONS
+----------------------------------------------------------------
+
+1. Plugin architecture:
+   New detectors can be added by creating a class that inherits BaseDetector,
+   implementing analyze(), and adding it to the list in main.py. No other
+   files need to change.
+
+2. Standardized result struct (DetectionResult):
+   All modules return the same dataclass. The monitor and alert system never
+   need to know which module produced a result.
+
+3. Temporal gating:
+   Posture and gaze both require an issue to persist for several seconds before
+   firing. This prevents false positives from momentary posture shifts or blinks.
+
+4. Alert cooldown:
+   AlertManager enforces a 20-second cooldown per module so the user isn't
+   bombarded with repeated warnings.
+
+5. Error isolation:
+   FocusGuardMonitor wraps each detector.analyze() call in a try/except.
+   A crash in one module does not stop the others.
+
+6. Relative calibration (posture v2):
+   Rather than comparing against fixed values, the posture detector captures
+   the user's natural sitting position at startup (press C) and detects
+   deviations from that personal baseline. This makes the system body-type
+   agnostic and camera-position agnostic.
+
+7. Z-axis noise smoothing (posture v2):
+   MediaPipe's depth estimates are noisy in real webcam conditions. The 10-frame
+   moving average filter on the Z-axis signal significantly reduces false
+   turtle-neck detections.
+
+
+----------------------------------------------------------------
+12. HOW TO RUN
+----------------------------------------------------------------
+
+Install dependencies:
+  pip install -r "text files/requirements.txt"
+
+CLI mode:
+  python main.py
+  (opens webcam, prints alerts to terminal, press Q to quit)
+
+GUI mode:
+  python Frontend.py
+  (full Tkinter interface with session timer and notification panel)
+
+Posture calibration (in either mode):
+  Once the camera is running, sit in your natural working position
+  and press the 'C' key to set your baseline. The posture detector
+  will not fire any posture warnings until you do this.
+
+
+================================================================
+END OF CONTEXT DOCUMENT
+================================================================
