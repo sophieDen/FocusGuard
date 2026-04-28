@@ -1,7 +1,7 @@
 import cv2
 from pathlib import Path
 from gaze_detector import GazeDetector
-from gaze_detector_eval import eval_report, multiclass_report
+from gaze_detector_eval import multiclass_report
 
 path3 = Path('/Users/issandungu/Downloads/Columbia Gaze Data Set')
 
@@ -84,7 +84,49 @@ def gaze_direction_eval_func():
 
     multiclass_report(y_true, y_pred, label_names, label='Gaze Direction - Columbia Gaze (Dataset)')
 
+
 if __name__ == '__main__':
     gaze_direction_eval_func()
+
+
+# ---------------------------------------------
+
+# Confusion Matrix (ROWS = TRUE, COLS = PRED):
+#
+# [[  0 514   0 171 155]
+#  [  0 960   0 225 215]
+#  [  0 698   1 369 332]
+#  [  0 571   1 520  28]
+#  [  0 585   0  48 487]]
+
+# Confusion Matrix Plot
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+cm3 = np.array([[0,514,0,171,155],
+ [0,960,0,225,215],
+ [0,698,1,369,332],
+ [0,571,1,520,28],
+ [0,585,0,48,487]])
+
+labels = ['CENTER', 'UP', 'DOWN', 'LEFT', 'RIGHT']
+
+plt.figure()
+sns.heatmap(
+    cm3,
+    annot=True,
+    fmt='d',
+    cmap='Blues',
+    xticklabels=labels,
+    yticklabels=labels
+)
+
+plt.title('Gaze Direction Detection - Confusion Matrix')
+plt.ylabel('True Label')
+plt.xlabel('Predicted Label')
+plt.tight_layout()
+plt.savefig('/Users/issandungu/Desktop/MSc Artificial Intelligence/Coursework/SCC.455 - Computer Vision/Model Evaluation - Coursework/Confusion Matrices/confusion_matrix_gazedirection.png', dpi=300)
+plt.show()
 
 
