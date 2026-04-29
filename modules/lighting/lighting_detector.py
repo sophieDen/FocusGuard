@@ -1,20 +1,12 @@
 """
-Analyzes ambient lighting conditions using histogram analysis.
-Detects three problematic scenarios:
-1. Overall too dark (eye strain, poor visibility)
-2. Overall too bright (glare, discomfort)
-3. High contrast (bright screen in dark room - worst for eyes)
-
-Contrast detection uses a face-detected bounding box as the subject region
-when a face is visible, falling back to a fixed center circle otherwise.
-This makes the high-contrast check semantically accurate: it measures the
-brightness difference the user's eyes are actually experiencing.
+Analyzes ambient lighting conditions 
 """
 
 import numpy as np
 import cv2
 import sys
 import os
+from collections import deque
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -23,32 +15,28 @@ import config
 
 
 class LightingDetector(BaseDetector):
-    """
-    Histogram-based lighting analysis for workspace environments.
 
-    The detector analyzes the distribution of pixel intensities to determine
-    if lighting conditions are suitable for productive work.
-
-    For contrast detection, a Haar cascade face detector is used to locate
-    the user's face precisely. The face region is compared against the
-    surrounding background to measure contrast. When no face is detected,
-    a fixed central region is used as fallback.
-    """
+    HISTORY_LEN = 10  # n frames to smooth before deciding
+    L_DARK_THRESHOLD = 25 # if L* below - too dark
+    L_BRIGHT_THRESHOLD = 78 # above - too bright
+    L_CONTRAST_THRESHOLD = 32
+    L_DARK_PIXEL_FRACTION = 0.65  # fraction of bg pixels with L* < L_DARK_THRESHOLD
+    L_BRIGHT_PIXEL_FRACTION = 0.45  # fraction of bg pixels with L* > L_BRIGHT_THRESHOLD
+    CALIBRATION_FRAMES = 30
+    B_COOL_DELTA = 6 # b* drop from baseline that triggers cool-light alert
+    B_LABEL_DELTA = 4 # b* delta for the warm/cool display label
 
     def __init__(self):
         self.frame_count = 0
+        self._history = deque(maxlen=self.HISTORY_LEN)
+        self._calib_buf = []
+        self._baseline_b = None
         cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         self._face_cascade = cv2.CascadeClassifier(cascade_path)
 
-    # =========================================================================
-    #   Face detection helper
-    # =========================================================================
-
+    #   Face detection
     def _get_face_region(self, gray: np.ndarray):
-        """
-        Returns (x, y, w, h) of the largest detected face, or None.
-        Uses OpenCV Haar cascade — no extra model file required.
-        """
+        """Returns (x,y,w,h) of the face"""
         faces = self._face_cascade.detectMultiScale(
             gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)
         )
@@ -56,196 +44,197 @@ class LightingDetector(BaseDetector):
             return None
         return max(faces, key=lambda f: f[2] * f[3])
 
-    # =========================================================================
-    #   Subject / background brightness split
-    # =========================================================================
-
-    def _analyze_regions(self, gray: np.ndarray):
+    #   Perceptual region analysis
+    def _analyze_regions(self, frame: np.ndarray, gray: np.ndarray):
         """
-        Splits the frame into a subject region (face or center fallback) and
-        background, then returns brightness and pixel-ratio metrics computed
-        on the background only.
+        Converts the frame to CIELAB and extracts perceptual metrics for the
+        face or geometric centre region and the bg separately.
 
         Returns:
-            subject_brightness   — mean brightness of face / center region
-            bg_brightness        — mean brightness of everything else
-            ambient_dark_ratio   — fraction of background pixels that are dark (0-85)
-            ambient_bright_ratio — fraction of background pixels that are bright (170-255)
-            face_detected        — bool
-            region_label         — "face" or "center"
-
-        Computing pixel ratios on background-only pixels is important: a
-        screen-lit face in a dark room would otherwise push bright_pixels_ratio
-        above the threshold and incorrectly trigger "too bright" instead of
-        "high contrast" or "too dark".
+            subject_L mean L* of subject region (0–100)
+            ambient_L mean L* of bg (0–100)
+            ambient_b mean b* of bg (−128 to +127)
+            dark_fraction fraction of bg pixels with L* < L_DARK_THRESHOLD
+            bright_fraction fraction of bg pixels with L* > L_BRIGHT_THRESHOLD
+            face_detected bool
+            region_label "face" or "center"
         """
+        lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+        L_ch = lab[:, :, 0] # luminance
+        b_ch = lab[:, :, 2] # yellow-blue axis
+
         face = self._get_face_region(gray)
 
         if face is not None:
             fx, fy, fw, fh = face
-            face_pixels = gray[fy:fy + fh, fx:fx + fw]
-
-            bg_mask = np.ones_like(gray, dtype=bool)
-            bg_mask[fy:fy + fh, fx:fx + fw] = False
-            bg_pixels = gray[bg_mask]
+            subject_mask = np.zeros(gray.shape, dtype=bool)
+            subject_mask[fy:fy + fh, fx:fx + fw] = True
+            face_detected = True
+            region_label = "face"
         else:
-            # Fallback: fixed center circle
             h, w = gray.shape
-            center_size = int(min(h, w) * config.LIGHTING_CENTER_RATIO)
+            sz = int(min(h, w) * config.LIGHTING_CENTER_RATIO)
             cy, cx = h // 2, w // 2
-            half = center_size // 2
+            half = sz // 2
+            subject_mask = np.zeros(gray.shape, dtype=bool)
+            subject_mask[cy - half:cy + half, cx - half:cx + half] = True
+            face_detected = False
+            region_label = "center"
 
-            face_pixels = gray[cy - half: cy + half, cx - half: cx + half]
+        bg_mask = ~subject_mask
 
-            bg_mask = np.ones_like(gray, dtype=bool)
-            bg_mask[cy - half: cy + half, cx - half: cx + half] = False
-            bg_pixels = gray[bg_mask]
+        # Convert to standard perceptual ranges
+        subject_L = float(np.mean(L_ch[subject_mask])) / 2.55
+        ambient_L = float(np.mean(L_ch[bg_mask])) / 2.55
+        ambient_b = float(np.mean(b_ch[bg_mask])) - 128.0
 
-        # Ambient histogram from background pixels only
-        bg_hist = np.bincount(bg_pixels.flatten(), minlength=256).astype(float)
-        bg_hist /= bg_hist.sum()
-        ambient_dark_ratio   = float(np.sum(bg_hist[:config.LIGHTING_DARK_PIXEL_THRESHOLD]))
-        ambient_bright_ratio = float(np.sum(bg_hist[config.LIGHTING_BRIGHT_PIXEL_THRESHOLD:]))
+        # Pixel fraction metrics on background only
+        bg_L = L_ch[bg_mask]
+        dark_l_raw = self.L_DARK_THRESHOLD * 2.55
+        bright_l_raw = self.L_BRIGHT_THRESHOLD * 2.55
+        dark_fraction = float(np.sum(bg_L < dark_l_raw) / len(bg_L))
+        bright_fraction = float(np.sum(bg_L > bright_l_raw) / len(bg_L))
 
-        return (
-            float(np.mean(face_pixels)),
-            float(np.mean(bg_pixels)),
-            ambient_dark_ratio,
-            ambient_bright_ratio,
-            face is not None,
-            "face" if face is not None else "center",
-        )
-
-    # =========================================================================
-    #   Main analysis
-    # =========================================================================
+        return subject_L, ambient_L, ambient_b, dark_fraction, bright_fraction, face_detected, region_label
 
     def analyze(self, frame: np.ndarray) -> DetectionResult:
-        """
-        Analyze lighting conditions from a webcam frame.
-
-        Args:
-            frame: BGR image from webcam
-
-        Returns:
-            DetectionResult indicating lighting quality
-        """
         self.frame_count += 1
-
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        histogram = cv2.calcHist([gray], [0], None, [256], [0, 256])
-        histogram = histogram.flatten() / histogram.sum()
+        (subject_L, ambient_L, ambient_b, dark_fraction, bright_fraction, face_detected, region_label) = self._analyze_regions(frame, gray)
 
-        mean_brightness   = float(np.mean(gray))
-        median_brightness = float(np.median(gray))
-        std_brightness    = float(np.std(gray))
+        contrast_L = subject_L - ambient_L
 
-        (subject_brightness, bg_brightness,
-         ambient_dark_ratio, ambient_bright_ratio,
-         face_detected, region_label) = self._analyze_regions(gray)
+        self._history.append({
+            "subject_L": subject_L,
+            "ambient_L": ambient_L,
+            "ambient_b": ambient_b,
+            "contrast_L": contrast_L,
+            "dark_fraction": dark_fraction,
+            "bright_fraction": bright_fraction,
+        })
 
-        contrast_difference = subject_brightness - bg_brightness
+        # Calibration
+        # Collecting raw b* values for the first CALIBRATION_FRAMES frames to establish baseline
+        if self._baseline_b is None:
+            self._calib_buf.append(ambient_b)
+            if len(self._calib_buf) >= self.CALIBRATION_FRAMES:
+                self._baseline_b = float(np.mean(self._calib_buf))
+            return DetectionResult(
+                module_name="lighting", is_ok=True,
+                warning_message="",  confidence=1.0,
+                extra={
+                    "issue_type": "calibrating",
+                    "calib_progress": f"{len(self._calib_buf)}/{self.CALIBRATION_FRAMES}",
+                }
+            )
+
+        # Waiting for the rolling window to fill then decide
+        if len(self._history) < 3:
+            return DetectionResult(
+                module_name="lighting", is_ok=True,
+                warning_message="", confidence=1.0
+            )
+
+        # Smoothed metrics
+        s_subject_L = float(np.mean([h["subject_L"] for h in self._history]))
+        s_ambient_L = float(np.mean([h["ambient_L"] for h in self._history]))
+        s_ambient_b = float(np.mean([h["ambient_b"] for h in self._history]))
+        s_contrast_L = float(np.mean([h["contrast_L"] for h in self._history]))
+        s_dark_frac = float(np.mean([h["dark_fraction"] for h in self._history]))
+        s_bright_frac = float(np.mean([h["bright_fraction"] for h in self._history]))
+
+        # Colour temperature relative to calibrated baseline
+        b_delta = s_ambient_b - self._baseline_b
+        color_temp = ("cool"    if b_delta < -self.B_LABEL_DELTA
+                      else "warm" if b_delta >  self.B_LABEL_DELTA
+                      else "neutral")
 
         base_extra = {
-            "face_detected":        face_detected,
-            "region_used":          region_label,
-            "subject_brightness":   subject_brightness,
-            "periphery_brightness": bg_brightness,
-            "contrast_difference":  contrast_difference,
-            "mean_brightness":      mean_brightness,
-            "median_brightness":    median_brightness,
-            "std_brightness":       std_brightness,
-            "ambient_dark_ratio":   ambient_dark_ratio,
-            "ambient_bright_ratio": ambient_bright_ratio,
-            "histogram":            histogram.tolist(),
+            "face_detected": face_detected,
+            "region_used": region_label,
+            "subject_L": round(s_subject_L,  1),
+            "ambient_L": round(s_ambient_L,  1),
+            "ambient_b": round(s_ambient_b,  1),
+            "b_delta": round(b_delta,       1),
+            "baseline_b": round(self._baseline_b, 1),
+            "contrast_L": round(s_contrast_L, 1),
+            "dark_fraction": round(s_dark_frac,  3),
+            "bright_fraction": round(s_bright_frac, 3),
+            "color_temp": color_temp,
         }
 
-        # 1. High contrast (most harmful) — bright face/screen in dark room
-        if (contrast_difference > config.LIGHTING_CONTRAST_THRESHOLD and
-                bg_brightness < config.LIGHTING_DARK_THRESHOLD):
-
-            if face_detected:
-                msg = (
-                    f"Your face is brightly lit ({subject_brightness:.0f}) "
-                    f"but the room is dark ({bg_brightness:.0f}). "
-                    "This causes severe eye strain. Turn on ambient lighting!"
-                )
-            else:
-                msg = (
-                    f"High contrast detected: screen area is bright ({subject_brightness:.0f}) "
-                    f"but the room is dark ({bg_brightness:.0f}). "
-                    "This causes severe eye strain. Turn on ambient lighting!"
-                )
-
+        # High contrast 
+        if s_contrast_L > self.L_CONTRAST_THRESHOLD and s_ambient_L < self.L_DARK_THRESHOLD:
+            subject_label = "face" if face_detected else "screen area"
+            msg = (
+                f"Your {subject_label} is brightly lit, but the room is dark"
+                "This causes severe eye strain. Turn on ambient lighting!"
+            )
             return DetectionResult(
-                module_name="lighting",
-                is_ok=False,
+                module_name="lighting", is_ok=False,
                 warning_message=msg,
-                confidence=self._calculate_confidence(
-                    contrast_difference,
-                    config.LIGHTING_CONTRAST_THRESHOLD,
-                    upper_bound=150
-                ),
+                confidence=self._confidence(s_contrast_L, self.L_CONTRAST_THRESHOLD, 70),
                 extra={"issue_type": "high_contrast", **base_extra}
             )
 
-        # 2. Overall too dark — uses background-only metrics so a screen-lit
-        #    face doesn't mask a dark ambient environment
-        if (ambient_dark_ratio > config.LIGHTING_LOW_INTENSITY_RATIO or
-                bg_brightness < config.LIGHTING_DARK_THRESHOLD):
+        # Too dark
+        if s_dark_frac > self.L_DARK_PIXEL_FRACTION or s_ambient_L < self.L_DARK_THRESHOLD:
+            msg = (
+                f"Room is too dark"
+                f"{s_dark_frac * 100:.0f}% of background underlit). "
+                "Increase ambient lighting to reduce eye strain."
+            )
             return DetectionResult(
-                module_name="lighting",
-                is_ok=False,
-                warning_message=(
-                    f"Room is too dark (ambient brightness: {bg_brightness:.0f}/255, "
-                    f"{ambient_dark_ratio * 100:.0f}% dark pixels). "
-                    "Increase ambient lighting to reduce eye strain."
-                ),
+                module_name="lighting", is_ok=False,
+                warning_message=msg,
                 confidence=max(
-                    ambient_dark_ratio / config.LIGHTING_LOW_INTENSITY_RATIO,
-                    (config.LIGHTING_DARK_THRESHOLD - bg_brightness) / config.LIGHTING_DARK_THRESHOLD
+                    s_dark_frac / self.L_DARK_PIXEL_FRACTION,
+                    (self.L_DARK_THRESHOLD - s_ambient_L) / self.L_DARK_THRESHOLD
                 ),
                 extra={"issue_type": "too_dark", **base_extra}
             )
 
-        # 3. Overall too bright — also background-only so face doesn't skew it
-        if (ambient_bright_ratio > config.LIGHTING_HIGH_INTENSITY_RATIO or
-                bg_brightness > config.LIGHTING_BRIGHT_THRESHOLD):
+        # Too bright
+        if s_bright_frac > self.L_BRIGHT_PIXEL_FRACTION or s_ambient_L > self.L_BRIGHT_THRESHOLD:
+            msg = (
+                f"Room is too bright"
+                f"{s_bright_frac * 100:.0f}% of background overlit). "
+                "Reduce glare or close blinds."
+            )
             return DetectionResult(
-                module_name="lighting",
-                is_ok=False,
-                warning_message=(
-                    f"Room is too bright (ambient brightness: {bg_brightness:.0f}/255, "
-                    f"{ambient_bright_ratio * 100:.0f}% bright pixels). "
-                    "Reduce glare or close blinds to prevent eye discomfort."
-                ),
+                module_name="lighting", is_ok=False,
+                warning_message=msg,
                 confidence=max(
-                    ambient_bright_ratio / config.LIGHTING_HIGH_INTENSITY_RATIO,
-                    (bg_brightness - config.LIGHTING_BRIGHT_THRESHOLD) / (255 - config.LIGHTING_BRIGHT_THRESHOLD)
+                    s_bright_frac / self.L_BRIGHT_PIXEL_FRACTION,
+                    (s_ambient_L - self.L_BRIGHT_THRESHOLD) / (100 - self.L_BRIGHT_THRESHOLD)
                 ),
                 extra={"issue_type": "too_bright", **base_extra}
             )
 
-        # All good
+        # Cool/blue-shifted light
+        # triggered when b* drops B_COOL_DELTA units below the calibrated baseline
+        # compensates camera's auto-white-balance offset
+        if b_delta < -self.B_COOL_DELTA:
+            msg = (
+                f"Cool blue-shifted lighting detected "
+                "Blue-enriched light suppresses melatonin and can cause eye strain "
+                "Consider switching to a warmer light."
+            )
+            return DetectionResult(
+                module_name="lighting", is_ok=False,
+                warning_message=msg,
+                confidence=self._confidence(abs(b_delta), self.B_COOL_DELTA, 20),
+                extra={"issue_type": "cool_light", **base_extra}
+            )
+
         return DetectionResult(
-            module_name="lighting",
-            is_ok=True,
-            warning_message="",
-            confidence=1.0,
+            module_name="lighting", is_ok=True,
+            warning_message="", confidence=1.0,
             extra={"issue_type": "none", **base_extra}
         )
 
-    # =========================================================================
-    #   Confidence scoring
-    # =========================================================================
-
-    def _calculate_confidence(self, value: float, threshold: float,
-                               upper_bound: float = None) -> float:
-        """
-        Normalize how far a value exceeds a threshold onto a 0.0–1.0 scale.
-        """
-        if upper_bound is None:
-            upper_bound = threshold * 2
-        normalized = (value - threshold) / (upper_bound - threshold)
-        return min(1.0, max(0.0, normalized))
+    #   Confidence calc
+    def _confidence(self, value: float, threshold: float, upper_bound: float) -> float:
+        """Normalises how far a value exceeds threshold onto 0.0–1.0."""
+        return min(1.0, max(0.0, (value - threshold) / (upper_bound - threshold)))

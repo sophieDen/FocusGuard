@@ -7,25 +7,22 @@ import numpy as np
 class DetectionResult:
     """
     The standard result struct every module must return.
-    Nobody changes this without telling the whole team.
     """
-    module_name: str          # lighting, gaze or posture
-    is_ok: bool               # True = no problem, False = warning needed
-    warning_message: str      # Human-readable, shown in UI/terminal
-    confidence: float         # 0.0 to 1.0 — how sure the module is
-    extra: Optional[dict] = None  # Module-specific extras (optional)
+    module_name: str
+    is_ok: bool #True means no problem, False - warning needed
+    warning_message: str
+    confidence: float # how sure the module is 0.0 to 1.0
+    extra: Optional[dict] = None  # optional
 
 class BaseDetector(ABC):
     """
-    Every module MUST inherit this and implement analyze().
-    That's the only rule.
+    Every module inherits this and implement analyze().
     """
     
     @abstractmethod
     def analyze(self, frame: np.ndarray) -> DetectionResult:
         """
         Takes a webcam frame, returns a DetectionResult.
-        This is the only method the monitor will ever call.
         """
         pass
     

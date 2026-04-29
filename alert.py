@@ -4,7 +4,7 @@ from core.base_detector import DetectionResult
 class AlertManager:
     """
     Receives results from all modules and decides when to
-    actually surface a warning. Prevents alert spam.
+    send a warning. Prevents alert spam.
     """
 
     def __init__(self, cooldown_seconds: int = 20):
@@ -13,8 +13,7 @@ class AlertManager:
 
     def process(self, result: DetectionResult) -> bool:
         """
-        Returns True if a warning was surfaced (i.e. the user
-        should be notified), False if still in cooldown or no issue.
+        Returns True if a warning should be sent, False if still in cooldown or no issue.
         """
         if result.is_ok:
             return False
@@ -30,7 +29,6 @@ class AlertManager:
         return False
     
     def _display(self, result: DetectionResult):
-        # Later this hooks into the frontend — for now just prints
         tag = result.module_name.upper()
-        print(f"[{tag} WARNING] {result.warning_message} "
+        print(f"{tag} WARNING {result.warning_message} "
               f"(confidence: {result.confidence:.0%})")

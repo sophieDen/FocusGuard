@@ -7,10 +7,9 @@ from config import CAMERA_INDEX, FRAME_WIDTH, FRAME_HEIGHT, TARGET_FPS
 
 class FocusGuardMonitor:
     """
-    Loads all detector modules, grabs webcam frames,
-    runs every module on each frame, and passes results
-    to AlertManager. Nobody needs to touch this to add
-    a new module — just register it in main.py.
+    Loads all detector modules, takes webcam frames,
+    runs every module on each frame, passes results
+    to AlertManager.
     """
 
     def __init__(self, detectors: list[BaseDetector]):
@@ -22,12 +21,10 @@ class FocusGuardMonitor:
         cap = cv2.VideoCapture(CAMERA_INDEX)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  FRAME_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
-
-        print("FocusGuard running — press Q to quit\n")
-
+        print("press Q to quit\n")
         while True:
             start = time.time()
-
+            # Read frame from cam
             ok, frame = cap.read()
             if not ok:
                 print("Camera read failed.")
@@ -39,10 +36,9 @@ class FocusGuardMonitor:
                     result = detector.analyze(frame)
                     self.alert_manager.process(result)
                 except Exception as e:
-                    # One broken module won't crash the whole system
-                    print(f"[ERROR] {detector} failed: {e}")
+                    print(f"error {detector} failed: {e}")
 
-            # Optional: show raw feed while developing
+            # show raw feed while developing
             cv2.imshow("FocusGuard", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
