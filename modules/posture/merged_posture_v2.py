@@ -16,7 +16,7 @@ def findAngle(x1, y1, x2, y2):
 
 def sendWarning():
     print("Warning: Bad posture detected for too long!")
-    # winsound.PlaySound("SystemHand", winsound.SND_ALIAS)
+    # winsound.PlaySound("SystemHand", winsound.SND_ALIAS) # For further improvement
 
 good_frames = 0 
 bad_frames = 0
@@ -39,9 +39,7 @@ base_offset = 0.0
 # Queue for smoothing the noisy Z-axis data
 depth_history = []
 
-# ==========================================
-# 1. SETUP POSE LANDMARKER
-# ==========================================
+# Setting up Pose Landmarker
 pose_model_path = "C:/Users/PC/Documents/Masters/Computer Vision/Posture/pose_landmarker_full.task"
 
 with open(pose_model_path, 'rb') as f:
@@ -54,9 +52,8 @@ pose_options = vision.PoseLandmarkerOptions(
 )
 pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
 
-# ==========================================
-# 2. SETUP OBJECT DETECTOR
-# ==========================================
+
+# Setting up Object Detector
 obj_model_path = "C:/Users/PC/Documents/Masters/Computer Vision/Posture/efficientdet_lite2.tflite" 
 
 obj_options = vision.ObjectDetectorOptions(
@@ -102,9 +99,7 @@ if __name__ == "__main__":
         pose_results = pose_detector.detect_for_video(mp_image, current_times)
         obj_results = obj_detector.detect_for_video(mp_image, current_times)
 
-        # ==========================================
-        # OBJECT DETECTION LOGIC & UI
-        # ==========================================
+        # Integrate with object detection logic and ui
         phone_detected_this_frame = False 
         chair_detected_this_frame = False
 
@@ -152,9 +147,7 @@ if __name__ == "__main__":
         else:
             chair_missing_start_time = None
 
-        # ==========================================
-        # POSE DETECTION LOGIC & UI
-        # ==========================================
+        # For Pose Detection Logic and UI
         if not pose_results.pose_landmarks:
             cv2.putText(image, "No pose detected", (10, 30), font, 0.9, red, 2)
             cv2.imshow('MediaPipe Integrated App', image)
@@ -187,15 +180,14 @@ if __name__ == "__main__":
                         
             m_shldr_z = (l_shldr_z + r_shldr_z) / 2 
         
-            # --- FIX: Moving Average Filter for Z-axis noise ---
+            # Moving Average Filter for Z-axis noise
             raw_depth_diff = nose_z - m_shldr_z
             depth_history.append(raw_depth_diff)
-            if len(depth_history) > 10: # Keep only the last 10 frames
+            if len(depth_history) > 10: # Use only the last 10 frames to prevent bias from one frame.
                 depth_history.pop(0)
             
             # Use the smoothed average for all calculations
             depth_diff = sum(depth_history) / len(depth_history)
-            # ---------------------------------------------------
 
             shoulder_lvl_difference = abs(l_shldr_y - r_shldr_y) 
             offset = findDistance(lm[11].x, lm[11].y, lm[12].x, lm[12].y)            
@@ -205,7 +197,7 @@ if __name__ == "__main__":
             z_delta = 0
             color = green 
             
-            # --- CALIBRATION TRIGGER ---
+            # For calibration initialization
             key = cv2.waitKey(1)
             if key & 0xFF == ord('c'):
                 base_depth = depth_diff
@@ -221,8 +213,7 @@ if __name__ == "__main__":
             else:
                 z_delta = base_depth - depth_diff
                 
-                # 1. Checking distance
-                if offset > (base_offset + 0.15): 
+                if offset > (base_offset + 0.15): # 1. Sitting posture condition checking: Checking distance
                     good_frames = 0           
                     bad_frames += 1           
                     color = yellow
@@ -232,20 +223,17 @@ if __name__ == "__main__":
                     bad_frames += 1           
                     color = yellow
                     suggestions = "Too far, please move closer."
-                    
-                # 2. Checking turtle neck (Threshold updated for smoothed signal)
-                elif z_delta > 0.02: 
+                elif z_delta > 0.02: # 2. Sitting posture condition checking: Checking turtle neck 
                     good_frames = 0
                     bad_frames += 1
                     color = red
                     suggestions = "Don't lean forward (Turtle neck)!"
-                    
-                elif abs(shoulder_lvl_difference - base_shoulder_lvl) > 20: 
+                elif abs(shoulder_lvl_difference - base_shoulder_lvl) > 20: # 3. Sitting posture condition checking: Checking uneven shoulder
                     good_frames = 0
                     bad_frames += 1
                     color = red
                     suggestions = "Your shoulders are uneven."
-                elif neck_inclination > 35: 
+                elif neck_inclination > 35: # 4. Sitting posture condition checking: Checking tif the user's neck is tilting
                     good_frames = 0
                     bad_frames += 1
                     color = red
@@ -255,9 +243,7 @@ if __name__ == "__main__":
                     bad_frames += 1
                     color = red
                     suggestions = "Straighten your neck."
-                    
-                # 3. Outputting good posture result
-                else:
+                else: # If none of the condition above is matched then outputting as good posture result
                     good_frames += 1
                     bad_frames = 0
                     color = light_green
@@ -271,11 +257,12 @@ if __name__ == "__main__":
             if bad_time > 30:
                 sendWarning()
 
-            if good_time > 0:
+            if good_time > 0: # Retain message display as feedback for debugging, which would be removed in the actual application
                 cv2.putText(image, f'Good Posture Time: {round(good_time, 1)}s', (10, h - 20), font, 0.7, green, 2)
             else:
                 cv2.putText(image, f'Bad Posture Time: {round(bad_time, 1)}s Reason: {suggestions}', (10, h - 20), font, 0.7, red, 2)
 
+            # Display the animation of lines, etc.
             cv2.circle(image, (l_shldr_x, l_shldr_y), 7, yellow, -1) 
             cv2.circle(image, (l_ear_x, l_ear_y), 7, yellow, -1)
             cv2.circle(image, (nose_x, nose_y), 7, red, -1)
