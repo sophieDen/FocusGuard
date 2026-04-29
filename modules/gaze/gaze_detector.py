@@ -151,8 +151,10 @@ class GazeDetector(BaseDetector):
     # =========================================================================
 
     def gaze_direct_detect(self, lm_result, frame, c_threshold=0.5):
+        """Inputs - face landmark result, video frame, iris/eye displacement threshold.
+        Returns gaze direction as an integer (1 - centre, 2 - up, 3 - down, 4 - left, 5 - right)"""
         h, w, _ = frame.shape
-        fl       = lm_result.face_landmarks[0]
+        fl       = lm_result.face_landmarks[0] # face landmarks
 
         def gaze_vec(inner_i, outer_i, iris_i):
             inner  = np.array([fl[inner_i].x * w, fl[inner_i].y * h])
