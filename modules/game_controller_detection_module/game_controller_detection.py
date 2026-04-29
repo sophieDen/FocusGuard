@@ -12,7 +12,7 @@ def update_result(result: mp.tasks.vision.ObjectDetectorResult, output_image: mp
 
 def main():
     # model path 
-    model_path = 'PS5controller.tflite' 
+    model_path = 'models/PS5controller.tflite'
 
     # model setup
     options = mp.tasks.vision.ObjectDetectorOptions(

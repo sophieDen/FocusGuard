@@ -65,12 +65,17 @@ class PostureDetector(BaseDetector):
         self._last_warning              = ""        # track last warning to re-trigger on change
 
         # ── Calibration & Smoothing State ────────────────────────────────────
-        self.is_calibrated         = False
-        self.base_depth            = 0.0
-        self.base_neck             = 0.0
-        self.base_shoulder_lvl     = 0.0
-        self.base_offset           = 0.0
-        self.depth_history         = []
+        self.is_calibrated          = False
+        self.base_depth             = 0.0
+        self.base_neck              = 0.0
+        self.base_shoulder_lvl      = 0.0
+        self.base_offset            = 0.0
+        self.depth_history          = []
+        self._calibrate_next_frame  = False  # set via request_calibration()
+
+    def request_calibration(self):
+        """Call this (e.g. on a keypress) to capture the baseline on the next frame."""
+        self._calibrate_next_frame = True
 
     # =========================================================================
     #   analyze() — called per-frame by the main pipeline
@@ -179,13 +184,13 @@ class PostureDetector(BaseDetector):
             return DetectionResult(module_name="posture", is_ok=True, warning_message="", confidence=1.0)
 
         # ── Calibration Trigger ──────────────────────────────────────────────
-        key = cv2.waitKey(1)
-        if key & 0xFF == ord('c'):
-            self.base_depth = depth_diff
-            self.base_neck = neck_inclination
-            self.base_shoulder_lvl = shoulder_lvl_diff
-            self.base_offset = offset
-            self.is_calibrated = True
+        if self._calibrate_next_frame:
+            self.base_depth            = depth_diff
+            self.base_neck             = neck_inclination
+            self.base_shoulder_lvl     = shoulder_lvl_diff
+            self.base_offset           = offset
+            self.is_calibrated         = True
+            self._calibrate_next_frame = False
 
         if not self.is_calibrated:
             return DetectionResult(
